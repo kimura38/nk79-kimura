@@ -22,18 +22,23 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 //================ 状態 =================
-let scene = "title"; // title settings game pause
-let language = "jp";
-let control = "button"; // button keyboard
-let touches = [];
-let keys = {};
+let scene="title"; // title settings game pause goal
+let language="jp";
+let control="button";
+let touches=[];
+let keys={};
 
 //================ テキスト =================
 const TEXT={
- jp:{title:"2Dアクションゲーム",play:"プレイ",back:"戻る",
-     lang:"言語",control:"操作",resume:"再開",retry:"やり直し",totitle:"タイトルへ"},
- en:{title:"2D Action Game",play:"Play",back:"Back",
-     lang:"Language",control:"Controls",resume:"Resume",retry:"Retry",totitle:"Title"}
+ jp:{
+  title:"2Dアクションゲーム",
+  play:"プレイ",
+  back:"戻る",
+  goal:"ゴール！",
+  totitle:"タイトルに戻る",
+  lang:"言語",
+  control:"操作方法"
+ }
 };
 
 //================ プレイヤー =================
@@ -48,7 +53,7 @@ const platforms=[
 ];
 
 // ゴール旗
-const goal={
+const goalObj={
  pole:{x:1400,y:140,w:6,h:100},
  flag:{x:1406,y:140,w:20,h:15}
 };
@@ -71,7 +76,6 @@ canvas.addEventListener("touchstart",e=>{
 canvas.addEventListener("touchmove",updateTouches);
 canvas.addEventListener("touchend",updateTouches);
 
-// キーボード
 window.addEventListener("keydown",e=>keys[e.key]=true);
 window.addEventListener("keyup",e=>keys[e.key]=false);
 
@@ -94,7 +98,7 @@ function reset(){
 function update(){
  if(scene!=="game") return;
 
- // ===== 操作 =====
+ // ボタン操作
  if(control==="button"){
   if(hitBox(20,210,40,40)) player.vx=-SPEED;
   else if(hitBox(70,210,40,40)) player.vx=SPEED;
@@ -105,6 +109,7 @@ function update(){
   }
  }
 
+ // キーボード操作
  if(control==="keyboard"){
   if(keys["ArrowLeft"]||keys["a"]) player.vx=-SPEED;
   else if(keys["ArrowRight"]||keys["d"]) player.vx=SPEED;
@@ -132,9 +137,9 @@ function update(){
   }
  });
 
- // ゴール（先に進めない）
- if(hit(player,goal.pole)||hit(player,goal.flag)){
-  player.x=goal.pole.x-player.w;
+ // ゴール判定
+ if(hit(player,goalObj.pole)||hit(player,goalObj.flag)){
+  scene="goal";
  }
 
  cameraX=Math.max(0,player.x-200);
@@ -142,7 +147,7 @@ function update(){
 
 //================ 描画 =================
 function drawButton(x,y,w,h,text){
- ctx.fillStyle="#777";          // 灰色
+ ctx.fillStyle="#777";
  ctx.fillRect(x,y,w,h);
  ctx.strokeStyle="white";
  ctx.strokeRect(x,y,w,h);
@@ -153,7 +158,7 @@ function drawButton(x,y,w,h,text){
 
 function draw(){
  ctx.clearRect(0,0,480,270);
- const T=TEXT[language];
+ const T=TEXT.jp;
 
  // タイトル
  if(scene==="title"){
@@ -171,27 +176,52 @@ function draw(){
   return;
  }
 
- // 設定
+ // 設定（枠なし）
  if(scene==="settings"){
-  drawButton(140,60,200,40,`${T.lang}: ${language}`);
-  drawButton(140,110,200,40,`${T.control}: ${control}`);
-  drawButton(140,180,200,40,T.back);
+  ctx.fillStyle="white";
+  ctx.font="20px sans-serif";
+  ctx.fillText("設定",200,40);
 
-  if(hitBox(140,60,200,40)) language=language==="jp"?"en":"jp";
-  if(hitBox(140,110,200,40)) control=control==="button"?"keyboard":"button";
-  if(hitBox(140,180,200,40)) scene="title";
+  ctx.font="16px sans-serif";
+  ctx.fillText(`${T.lang} : ${language}`,140,80);
+  ctx.fillText(`${T.control} : ${control}`,140,110);
+
+  ctx.fillText("キーボード操作",140,150);
+  ctx.fillText("← / A ：左移動",140,170);
+  ctx.fillText("→ / D ：右移動",140,190);
+  ctx.fillText("Enter ：ジャンプ",140,210);
+
+  // タップ判定（文字範囲）
+  if(hitBox(140,60,200,30)) language=language==="jp"?"en":"jp";
+  if(hitBox(140,90,200,30)) control=control==="button"?"keyboard":"button";
+  if(hitBox(140,230,200,30)) scene="title";
+
+  ctx.fillText("← 戻る",140,230);
   return;
  }
 
  // ポーズ
  if(scene==="pause"){
-  drawButton(140,80,200,40,T.resume);
-  drawButton(140,130,200,40,T.retry);
-  drawButton(140,180,200,40,T.totitle);
+  drawButton(140,80,200,40,"再開");
+  drawButton(140,130,200,40,"やり直し");
+  drawButton(140,180,200,40,"タイトルへ");
 
   if(hitBox(140,80,200,40)) scene="game";
   if(hitBox(140,130,200,40)){ reset(); scene="game"; }
   if(hitBox(140,180,200,40)) scene="title";
+  return;
+ }
+
+ // ゴール
+ if(scene==="goal"){
+  ctx.fillStyle="black";
+  ctx.fillRect(0,0,480,270);
+  ctx.fillStyle="white";
+  ctx.font="30px sans-serif";
+  ctx.fillText(T.goal,170,120);
+  drawButton(140,170,200,40,T.totitle);
+
+  if(hitBox(140,170,200,40)) scene="title";
   return;
  }
 
@@ -203,16 +233,15 @@ function draw(){
  platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
 
  ctx.fillStyle="white";
- ctx.fillRect(goal.pole.x,goal.pole.y,goal.pole.w,goal.pole.h);
+ ctx.fillRect(goalObj.pole.x,goalObj.pole.y,goalObj.pole.w,goalObj.pole.h);
  ctx.fillStyle="red";
- ctx.fillRect(goal.flag.x,goal.flag.y,goal.flag.w,goal.flag.h);
+ ctx.fillRect(goalObj.flag.x,goalObj.flag.y,goalObj.flag.w,goalObj.flag.h);
 
  ctx.fillStyle="red";
  ctx.fillRect(player.x,player.y,player.w,player.h);
 
  ctx.restore();
 
- // UI
  drawButton(430,10,40,25,"Ⅱ");
  drawButton(20,210,40,40,"◀");
  drawButton(70,210,40,40,"▶");

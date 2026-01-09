@@ -18,18 +18,18 @@ canvas{
 <canvas id="game" width="480" height="270"></canvas>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
 //================ 状態 =================
-let scene="title"; // title settings map game pause goal
+let scene="title"; // title settings game pause goal
 let language="jp";
 let control="button";
 let pointers=[];
+let pointerDown=false;
+let pointerJustDown=false;
 let keys={};
-
-let currentStage=0;
-let unlockedStage=1;
+let coinCount=0;
 
 //================ 言語 =================
 const TEXT={
@@ -44,12 +44,7 @@ const TEXT={
   retry:"やり直し",
   totitle:"タイトルへ",
   goal:"ゴール！",
-  map:"ステージ選択",
-  stage:"ステージ",
-  kbTitle:"キーボード操作",
-  left:"← / A ：左移動",
-  right:"→ / D ：右移動",
-  jump:"Enter ：ジャンプ"
+  coins:"コイン"
  },
  en:{
   title:"2D Action Game",
@@ -62,68 +57,89 @@ const TEXT={
   retry:"Retry",
   totitle:"Back to Title",
   goal:"GOAL!",
-  map:"Stage Select",
-  stage:"Stage",
-  kbTitle:"Keyboard Controls",
-  left:"← / A : Move Left",
-  right:"→ / D : Move Right",
-  jump:"Enter : Jump"
+  coins:"Coins"
  }
 };
 
-//================ セーブ / ロード =================
-function saveGame(){
- const data={
-  unlockedStage,
-  language,
-  control
- };
- localStorage.setItem("actionGameSave",JSON.stringify(data));
+function langLabel(){
+ return language==="jp"?"日本語":"English";
 }
-
-function loadGame(){
- const data=localStorage.getItem("actionGameSave");
- if(!data) return;
- try{
-  const save=JSON.parse(data);
-  if(save.unlockedStage) unlockedStage=save.unlockedStage;
-  if(save.language) language=save.language;
-  if(save.control) control=save.control;
- }catch(e){}
+function controlLabel(){
+ if(control==="button"){
+  return language==="jp"?"ボタン":"Buttons";
+ }
+ return language==="jp"?"キーボード":"Keyboard";
 }
 
 //================ プレイヤー =================
-const player={x:50,y:0,w:24,h:24,vx:0,vy:0,onGround:false};
+const player={
+ x:50,y:0,w:22,h:22,
+ vx:0,vy:0,onGround:false
+};
 let cameraX=0;
 
 //================ ステージ =================
-const platforms=[
- {x:0,y:240,w:1600,h:30},
- {x:200,y:190,w:80,h:10},
- {x:400,y:160,w:80,h:10}
+const blocks=[
+ // 地面
+ {x:0,y:240,w:1800,h:30,type:"ground"},
+ // 足場
+ {x:200,y:190,w:80,h:12,type:"platform"},
+ {x:400,y:160,w:80,h:12,type:"platform"},
+ {x:650,y:130,w:80,h:12,type:"platform"},
+ // ダメージ
+ {x:520,y:230,w:60,h:10,type:"danger"}
+];
+
+const coins=[
+ {x:220,y:160,collected:false},
+ {x:420,y:130,collected:false},
+ {x:670,y:100,collected:false}
 ];
 
 const goalObj={
- pole:{x:1400,y:140,w:6,h:100},
- flag:{x:1406,y:140,w:20,h:15}
+ x:1600,y:140,w:12,h:100
 };
 
 const GRAVITY=0.6,SPEED=3,JUMP=-10;
 
 //================ 入力 =================
-function setPointers(e){
- const r=canvas.getBoundingClientRect();
- pointers=[...e.touches||[]].map(t=>({x:t.clientX-r.left,y:t.clientY-r.top}));
-}
-canvas.addEventListener("touchstart",setPointers);
-canvas.addEventListener("touchmove",setPointers);
-canvas.addEventListener("touchend",()=>pointers=[]);
-
-canvas.addEventListener("mousedown",e=>{
+function setPointer(e){
  const r=canvas.getBoundingClientRect();
  pointers=[{x:e.clientX-r.left,y:e.clientY-r.top}];
+}
+canvas.addEventListener("mousedown",e=>{
+ setPointer(e);
+ pointerDown=true;
+ pointerJustDown=true;
 });
-window.addEventListener("mouseup",()=>pointers=[]);
+canvas.addEventListener("mousemove",e=>{
+ if(pointerDown) setPointer(e);
+});
+window.addEventListener("mouseup",()=>{
+ pointerDown=false;
+ pointers=[];
+});
+
+canvas.addEventListener("touchstart",e=>{
+ const r=canvas.getBoundingClientRect();
+ pointers=[...e.touches].map(t=>({
+  x:t.clientX-r.left,
+  y:t.clientY-r.top
+ }));
+ pointerDown=true;
+ pointerJustDown=true;
+});
+canvas.addEventListener("touchmove",e=>{
+ const r=canvas.getBoundingClientRect();
+ pointers=[...e.touches].map(t=>({
+  x:t.clientX-r.left,
+  y:t.clientY-r.top
+ }));
+});
+canvas.addEventListener("touchend",()=>{
+ pointerDown=false;
+ pointers=[];
+});
 
 window.addEventListener("keydown",e=>keys[e.key]=true);
 window.addEventListener("keyup",e=>keys[e.key]=false);
@@ -135,60 +151,105 @@ function hit(a,b){
 function hitBox(x,y,w,h){
  return pointers.some(p=>p.x>=x&&p.x<=x+w&&p.y>=y&&p.y<=y+h);
 }
+function justPressed(x,y,w,h){
+ return pointerJustDown && hitBox(x,y,w,h);
+}
 
 //================ リセット =================
 function reset(){
  player.x=50;player.y=0;
  player.vx=0;player.vy=0;
+ coinCount=0;
+ coins.forEach(c=>c.collected=false);
  cameraX=0;
 }
 
 //================ 更新 =================
 function update(){
- if(scene!=="game") return;
 
- if(control==="button"){
-  if(hitBox(20,210,40,40)) player.vx=-SPEED;
-  else if(hitBox(70,210,40,40)) player.vx=SPEED;
-  else player.vx=0;
+ // UI操作
+ if(scene==="title"){
+  if(justPressed(140,160,200,40)){ reset(); scene="game"; }
+  if(justPressed(430,10,40,25)) scene="settings";
+ }
+ if(scene==="settings"){
+  if(justPressed(140,80,220,30)) language=language==="jp"?"en":"jp";
+  if(justPressed(140,110,220,30)) control=control==="button"?"keyboard":"button";
+  if(justPressed(140,235,220,30)) scene="title";
+ }
+ if(scene==="pause"){
+  if(justPressed(140,80,200,40)) scene="game";
+  if(justPressed(140,130,200,40)){ reset(); scene="game"; }
+  if(justPressed(140,180,200,40)) scene="title";
+ }
+ if(scene==="goal"){
+  if(justPressed(140,170,200,40)) scene="title";
+ }
 
-  if(hitBox(400,210,50,40)&&player.onGround){
+ // ===== ゲーム処理 =====
+ if(scene==="game"){
+
+  if(justPressed(430,10,40,25)) scene="pause";
+
+  // 横移動（ジャンプと独立）
+  let move=0;
+  if(control==="button"){
+   if(hitBox(20,210,40,40)) move=-1;
+   if(hitBox(70,210,40,40)) move=1;
+  }
+  if(control==="keyboard"){
+   if(keys["ArrowLeft"]||keys["a"]) move=-1;
+   if(keys["ArrowRight"]||keys["d"]) move=1;
+  }
+  player.vx=move*SPEED;
+
+  // ジャンプ（移動中OK）
+  let jump=false;
+  if(control==="button"){
+   if(hitBox(400,210,50,40)) jump=true;
+  }
+  if(control==="keyboard"){
+   if(keys["Enter"]) jump=true;
+  }
+  if(jump && player.onGround){
    player.vy=JUMP;
   }
- }
 
- if(control==="keyboard"){
-  if(keys["ArrowLeft"]||keys["a"]) player.vx=-SPEED;
-  else if(keys["ArrowRight"]||keys["d"]) player.vx=SPEED;
-  else player.vx=0;
+  // 物理
+  player.vy+=GRAVITY;
+  player.x+=player.vx;
+  player.y+=player.vy;
+  player.onGround=false;
 
-  if(keys["Enter"]&&player.onGround){
-   player.vy=JUMP;
+  blocks.forEach(b=>{
+   if(hit(player,b)){
+    if(b.type==="danger"){
+     reset();
+    }else if(player.vy>0){
+     player.y=b.y-player.h;
+     player.vy=0;
+     player.onGround=true;
+    }
+   }
+  });
+
+  // コイン取得
+  coins.forEach(c=>{
+   if(!c.collected && hit(player,{x:c.x,y:c.y,w:12,h:12})){
+    c.collected=true;
+    coinCount++;
+   }
+  });
+
+  // ゴール
+  if(hit(player,goalObj)){
+   scene="goal";
   }
+
+  cameraX=Math.max(0,player.x-200);
  }
 
- if(hitBox(430,10,40,25)) scene="pause";
-
- player.vy+=GRAVITY;
- player.x+=player.vx;
- player.y+=player.vy;
- player.onGround=false;
-
- platforms.forEach(p=>{
-  if(hit(player,p)&&player.vy>0){
-   player.y=p.y-player.h;
-   player.vy=0;
-   player.onGround=true;
-  }
- });
-
- if(hit(player,goalObj.pole)||hit(player,goalObj.flag)){
-  unlockedStage=Math.max(unlockedStage,currentStage+1);
-  saveGame();
-  scene="goal";
- }
-
- cameraX=Math.max(0,player.x-200);
+ pointerJustDown=false;
 }
 
 //================ 描画 =================
@@ -207,30 +268,15 @@ function draw(){
  const T=TEXT[language];
 
  if(scene==="title"){
+  ctx.fillStyle="#5c94fc";
+  ctx.fillRect(0,0,480,200);
+  ctx.fillStyle="#228b22";
+  ctx.fillRect(0,200,480,70);
   ctx.fillStyle="white";
   ctx.font="26px sans-serif";
   ctx.fillText(T.title,80,100);
   drawButton(140,160,200,40,T.play);
   drawButton(430,10,40,25,"⚙");
-  if(hitBox(140,160,200,40)) scene="map";
-  if(hitBox(430,10,40,25)) scene="settings";
-  return;
- }
-
- if(scene==="map"){
-  ctx.fillStyle="white";
-  ctx.font="22px sans-serif";
-  ctx.fillText(T.map,160,40);
-  for(let i=0;i<unlockedStage;i++){
-   drawButton(140,80+i*50,200,40,`${T.stage} ${i+1}`);
-   if(hitBox(140,80+i*50,200,40)){
-    currentStage=i;
-    reset();
-    scene="game";
-   }
-  }
-  drawButton(10,10,80,30,T.back);
-  if(hitBox(10,10,80,30)) scene="title";
   return;
  }
 
@@ -239,19 +285,9 @@ function draw(){
   ctx.font="20px sans-serif";
   ctx.fillText(T.settings,200,40);
   ctx.font="16px sans-serif";
-  ctx.fillText(`${T.lang} : ${language==="jp"?"日本語":"English"}`,140,80);
-  ctx.fillText(`${T.control} : ${control==="button"?"ボタン":"キーボード"}`,140,110);
-  if(control==="keyboard"){
-   ctx.fillText(T.kbTitle,140,150);
-   ctx.fillText(T.left,140,170);
-   ctx.fillText(T.right,140,190);
-   ctx.fillText(T.jump,140,210);
-  }
+  ctx.fillText(`${T.lang} : ${langLabel()}`,140,80);
+  ctx.fillText(`${T.control} : ${controlLabel()}`,140,110);
   ctx.fillText("← "+T.back,140,235);
-
-  if(hitBox(140,60,220,30)){language=language==="jp"?"en":"jp";saveGame();}
-  if(hitBox(140,90,220,30)){control=control==="button"?"keyboard":"button";saveGame();}
-  if(hitBox(140,220,220,30)) scene="title";
   return;
  }
 
@@ -259,34 +295,52 @@ function draw(){
   drawButton(140,80,200,40,T.resume);
   drawButton(140,130,200,40,T.retry);
   drawButton(140,180,200,40,T.totitle);
-  if(hitBox(140,80,200,40)) scene="game";
-  if(hitBox(140,130,200,40)){reset();scene="game";}
-  if(hitBox(140,180,200,40)) scene="title";
   return;
  }
 
  if(scene==="goal"){
+  ctx.fillStyle="black";
+  ctx.fillRect(0,0,480,270);
   ctx.fillStyle="white";
   ctx.font="30px sans-serif";
   ctx.fillText(T.goal,170,120);
   drawButton(140,170,200,40,T.totitle);
-  if(hitBox(140,170,200,40)) scene="title";
   return;
  }
 
+ // ===== ゲーム描画 =====
  ctx.save();
  ctx.translate(-cameraX,0);
- ctx.fillStyle="#654321";
- platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
+
+ blocks.forEach(b=>{
+  if(b.type==="ground") ctx.fillStyle="#654321";
+  if(b.type==="platform") ctx.fillStyle="#228b22";
+  if(b.type==="danger") ctx.fillStyle="red";
+  ctx.fillRect(b.x,b.y,b.w,b.h);
+ });
+
+ ctx.fillStyle="gold";
+ coins.forEach(c=>{
+  if(!c.collected){
+   ctx.beginPath();
+   ctx.arc(c.x+6,c.y+6,6,0,Math.PI*2);
+   ctx.fill();
+  }
+ });
+
  ctx.fillStyle="white";
- ctx.fillRect(goalObj.pole.x,goalObj.pole.y,goalObj.pole.w,goalObj.pole.h);
- ctx.fillStyle="red";
- ctx.fillRect(goalObj.flag.x,goalObj.flag.y,goalObj.flag.w,goalObj.flag.h);
- ctx.fillStyle="red";
+ ctx.fillRect(goalObj.x,goalObj.y,goalObj.w,goalObj.h);
+
+ ctx.fillStyle="blue";
  ctx.fillRect(player.x,player.y,player.w,player.h);
+
  ctx.restore();
 
+ ctx.fillStyle="white";
+ ctx.fillText(`${T.coins}: ${coinCount}`,10,20);
+
  drawButton(430,10,40,25,"Ⅱ");
+
  if(control==="button"){
   drawButton(20,210,40,40,"◀");
   drawButton(70,210,40,40,"▶");
@@ -294,14 +348,14 @@ function draw(){
  }
 }
 
+//================ ループ =================
 function loop(){
  update();
  draw();
  requestAnimationFrame(loop);
 }
-
-loadGame();
 loop();
 </script>
+
 </body>
 </html>

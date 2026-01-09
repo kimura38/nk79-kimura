@@ -2,190 +2,189 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Tetris</title>
+<title>Block Blast</title>
 <style>
 body{
  margin:0;
- background:black;
+ background:#111;
  display:flex;
  justify-content:center;
  align-items:center;
  height:100vh;
 }
 canvas{
- background:#111;
+ background:#222;
+ touch-action:none;
 }
 </style>
 </head>
 <body>
 
-<canvas id="game" width="300" height="600"></canvas>
+<canvas id="game" width="360" height="500"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const COLS = 10;
-const ROWS = 20;
-const SIZE = 30;
+const GRID = 8;
+const SIZE = 40;
+const OFFSET_Y = 20;
+const SLOT_Y = 380;
 
-let board = Array.from({length:ROWS},()=>Array(COLS).fill(0));
-
-const COLORS = [
- null,
- "#00f0f0", // I
- "#0000f0", // J
- "#f0a000", // L
- "#f0f000", // O
- "#00f000", // S
- "#a000f0", // T
- "#f00000"  // Z
-];
+let board = Array.from({length:GRID},()=>Array(GRID).fill(0));
+let pieces = [];
+let dragging = null;
 
 const SHAPES = [
- [],
- [[1,1,1,1]],
- [[2,0,0],[2,2,2]],
- [[0,0,3],[3,3,3]],
- [[4,4],[4,4]],
- [[0,5,5],[5,5,0]],
- [[0,6,0],[6,6,6]],
- [[7,7,0],[0,7,7]]
+ [[1]],
+ [[1,1]],
+ [[1],[1]],
+ [[1,1,1]],
+ [[1],[1],[1]],
+ [[1,1],[1,1]],
+ [[1,1,1],[0,1,0]]
 ];
 
-let piece, pos;
-let dropCounter = 0;
-let dropInterval = 500;
-let lastTime = 0;
-let gameOver = false;
-
-function newPiece(){
- const type = Math.floor(Math.random()*7)+1;
- piece = SHAPES[type].map(r=>r.slice());
- pos = {x:3,y:0};
- if(collide()){
-  gameOver = true;
+function newPieces(){
+ pieces = [];
+ for(let i=0;i<3;i++){
+  pieces.push({
+   shape: SHAPES[Math.floor(Math.random()*SHAPES.length)],
+   x: 60 + i*110,
+   y: SLOT_Y
+  });
  }
 }
 
-function rotate(matrix){
- return matrix[0].map((_,i)=>matrix.map(r=>r[i]).reverse());
+function drawCell(x,y,color){
+ ctx.fillStyle=color;
+ ctx.fillRect(x,y,SIZE,SIZE);
+ ctx.strokeStyle="#333";
+ ctx.strokeRect(x,y,SIZE,SIZE);
 }
 
-function collide(){
- for(let y=0;y<piece.length;y++){
-  for(let x=0;x<piece[y].length;x++){
-   if(piece[y][x]){
-    let bx = x + pos.x;
-    let by = y + pos.y;
-    if(bx<0 || bx>=COLS || by>=ROWS || board[by]?.[bx]){
-     return true;
+function draw(){
+ ctx.clearRect(0,0,360,500);
+
+ // ボード
+ for(let y=0;y<GRID;y++){
+  for(let x=0;x<GRID;x++){
+   drawCell(x*SIZE, y*SIZE+OFFSET_Y,
+    board[y][x] ? "#4caf50" : "#333");
+  }
+ }
+
+ // ピース
+ pieces.forEach(p=>{
+  p.shape.forEach((row,y)=>{
+   row.forEach((v,x)=>{
+    if(v){
+     drawCell(p.x+x*SIZE, p.y+y*SIZE, "#fbc02d");
+    }
+   });
+  });
+ });
+
+ // ラベル
+ ctx.fillStyle="white";
+ ctx.font="16px sans-serif";
+ ctx.fillText("置いて消そう", 10, 15);
+}
+
+function canPlace(px,py,shape){
+ for(let y=0;y<shape.length;y++){
+  for(let x=0;x<shape[y].length;x++){
+   if(shape[y][x]){
+    let gx = Math.floor((px+x*SIZE)/SIZE);
+    let gy = Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
+    if(gx<0||gx>=GRID||gy<0||gy>=GRID||board[gy][gx]){
+     return false;
     }
    }
   }
  }
- return false;
+ return true;
 }
 
-function merge(){
- piece.forEach((row,y)=>{
+function place(px,py,piece){
+ piece.shape.forEach((row,y)=>{
   row.forEach((v,x)=>{
-   if(v) board[y+pos.y][x+pos.x]=v;
+   if(v){
+    let gx = Math.floor((px+x*SIZE)/SIZE);
+    let gy = Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
+    board[gy][gx]=1;
+   }
   });
  });
 }
 
 function clearLines(){
- outer:for(let y=ROWS-1;y>=0;y--){
-  for(let x=0;x<COLS;x++){
-   if(!board[y][x]) continue outer;
+ let cleared = false;
+
+ for(let y=0;y<GRID;y++){
+  if(board[y].every(v=>v)){
+   board[y].fill(0);
+   cleared = true;
   }
-  board.splice(y,1);
-  board.unshift(Array(COLS).fill(0));
-  y++;
  }
-}
 
-function drawBlock(x,y,color){
- ctx.fillStyle=color;
- ctx.fillRect(x*SIZE,y*SIZE,SIZE,SIZE);
- ctx.strokeStyle="#000";
- ctx.strokeRect(x*SIZE,y*SIZE,SIZE,SIZE);
-}
-
-function draw(){
- ctx.clearRect(0,0,300,600);
-
- board.forEach((row,y)=>{
-  row.forEach((v,x)=>{
-   if(v) drawBlock(x,y,COLORS[v]);
-  });
- });
-
- piece.forEach((row,y)=>{
-  row.forEach((v,x)=>{
-   if(v) drawBlock(x+pos.x,y+pos.y,COLORS[v]);
-  });
- });
-
- if(gameOver){
-  ctx.fillStyle="rgba(0,0,0,0.7)";
-  ctx.fillRect(0,0,300,600);
-  ctx.fillStyle="white";
-  ctx.font="30px sans-serif";
-  ctx.fillText("GAME OVER",35,300);
- }
-}
-
-function update(time=0){
- const delta = time - lastTime;
- lastTime = time;
- dropCounter += delta;
-
- if(dropCounter > dropInterval){
-  pos.y++;
-  if(collide()){
-   pos.y--;
-   merge();
-   clearLines();
-   newPiece();
+ for(let x=0;x<GRID;x++){
+  let full = true;
+  for(let y=0;y<GRID;y++){
+   if(!board[y][x]) full=false;
   }
-  dropCounter = 0;
+  if(full){
+   for(let y=0;y<GRID;y++) board[y][x]=0;
+   cleared = true;
+  }
  }
 
- draw();
- if(!gameOver) requestAnimationFrame(update);
+ return cleared;
 }
 
-document.addEventListener("keydown",e=>{
- if(gameOver) return;
+canvas.addEventListener("pointerdown",e=>{
+ const r = canvas.getBoundingClientRect();
+ const mx = e.clientX - r.left;
+ const my = e.clientY - r.top;
 
- if(e.key==="ArrowLeft"){
-  pos.x--;
-  if(collide()) pos.x++;
- }
- if(e.key==="ArrowRight"){
-  pos.x++;
-  if(collide()) pos.x--;
- }
- if(e.key==="ArrowDown"){
-  pos.y++;
-  if(collide()) pos.y--;
- }
- if(e.key==="ArrowUp"){
-  const rotated = rotate(piece);
-  const old = piece;
-  piece = rotated;
-  if(collide()) piece = old;
- }
- if(e.code==="Space"){
-  while(!collide()) pos.y++;
-  pos.y--;
- }
+ pieces.forEach(p=>{
+  const w = p.shape[0].length * SIZE;
+  const h = p.shape.length * SIZE;
+  if(mx>p.x && mx<p.x+w && my>p.y && my<p.y+h){
+   dragging = {p, ox:mx-p.x, oy:my-p.y};
+  }
+ });
 });
 
-newPiece();
-update();
+canvas.addEventListener("pointermove",e=>{
+ if(!dragging) return;
+ const r = canvas.getBoundingClientRect();
+ dragging.p.x = e.clientX - r.left - dragging.ox;
+ dragging.p.y = e.clientY - r.top - dragging.oy;
+});
+
+canvas.addEventListener("pointerup",()=>{
+ if(!dragging) return;
+ const p = dragging.p;
+
+ if(canPlace(p.x,p.y,p.shape)){
+  place(p.x,p.y,p);
+  pieces = pieces.filter(x=>x!==p);
+  clearLines();
+  if(pieces.length===0) newPieces();
+ }else{
+  p.x = 60 + pieces.indexOf(p)*110;
+  p.y = SLOT_Y;
+ }
+ dragging = null;
+});
+
+newPieces();
+function loop(){
+ draw();
+ requestAnimationFrame(loop);
+}
+loop();
 </script>
 
 </body>

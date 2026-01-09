@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Block Blast</title>
+<title>ブロック崩し</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <style>
 html,body{
  margin:0;
@@ -13,6 +14,7 @@ html,body{
 }
 canvas{
  display:block;
+ margin:auto;
  background:#222;
  touch-action:none;
 }
@@ -26,13 +28,17 @@ canvas{
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-let W,H,SIZE,OFFSET_Y,SLOT_Y,SLOT_SCALE=0.6;
-const GRID=8;
+// ===== 基本設定 =====
+const GRID = 8;
+let W,H,SIZE,OFFSET_Y,SLOT_Y;
+const SLOT_SCALE = 0.6;
 
-let board, pieces, dragging=null, score=0;
+let board, pieces, dragging=null;
+let score = 0;
+let combo = 0;
 
-// 形
-const SHAPES=[
+// ===== ブロック形 =====
+const SHAPES = [
  [[1]],
  [[1,1]],
  [[1],[1]],
@@ -42,36 +48,42 @@ const SHAPES=[
  [[1,1,1],[0,1,0]]
 ];
 
+// ===== 画面サイズ（縦画面最優先）=====
 function resize(){
- W=innerWidth;
- H=innerHeight;
- canvas.width=W;
- canvas.height=H;
- SIZE=Math.min(W/(GRID+1),H/14);
- OFFSET_Y=SIZE;
- SLOT_Y=OFFSET_Y+GRID*SIZE+SIZE*0.8;
+ W = Math.min(innerWidth, 480);
+ H = innerHeight;
+ canvas.width = W;
+ canvas.height = H;
+
+ SIZE = Math.floor(W / (GRID + 1));
+ OFFSET_Y = SIZE * 1.5;
+ SLOT_Y = OFFSET_Y + GRID * SIZE + SIZE;
 }
-window.addEventListener("resize",resize);
+window.addEventListener("resize", resize);
 resize();
 
+// ===== 初期化 =====
 function reset(){
- board=Array.from({length:GRID},()=>Array(GRID).fill(0));
- score=0;
+ board = Array.from({length:GRID},()=>Array(GRID).fill(0));
+ score = 0;
+ combo = 0;
  newPieces();
 }
 reset();
 
+// ===== 新ブロック =====
 function newPieces(){
  pieces=[];
  for(let i=0;i<3;i++){
   pieces.push({
-   shape:SHAPES[Math.floor(Math.random()*SHAPES.length)],
-   x:W/2+(i-1)*SIZE*3,
-   y:SLOT_Y
+   shape: SHAPES[Math.floor(Math.random()*SHAPES.length)],
+   x: W/2 + (i-1)*SIZE*3,
+   y: SLOT_Y
   });
  }
 }
 
+// ===== 描画 =====
 function drawCell(x,y,s,color){
  ctx.fillStyle=color;
  ctx.fillRect(x,y,s,s);
@@ -79,12 +91,13 @@ function drawCell(x,y,s,color){
  ctx.strokeRect(x,y,s,s);
 }
 
+// ===== 判定 =====
 function canPlace(px,py,shape){
  for(let y=0;y<shape.length;y++){
   for(let x=0;x<shape[y].length;x++){
    if(shape[y][x]){
-    let gx=Math.floor((px+x*SIZE)/SIZE);
-    let gy=Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
+    let gx = Math.floor((px+x*SIZE)/SIZE);
+    let gy = Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
     if(gx<0||gx>=GRID||gy<0||gy>=GRID||board[gy][gx]) return false;
    }
   }
@@ -102,8 +115,9 @@ function place(px,py,shape){
  }));
 }
 
+// ===== ライン消去＋コンボ =====
 function clearLines(){
- let cleared=0;
+ let cleared = 0;
 
  for(let y=0;y<GRID;y++){
   if(board[y].every(v=>v)){
@@ -111,6 +125,7 @@ function clearLines(){
    cleared++;
   }
  }
+
  for(let x=0;x<GRID;x++){
   let full=true;
   for(let y=0;y<GRID;y++) if(!board[y][x]) full=false;
@@ -119,72 +134,96 @@ function clearLines(){
    cleared++;
   }
  }
- if(cleared>0) score+=cleared*100;
+
+ if(cleared > 0){
+  combo++;
+  const base = cleared * 100;
+  const bonus = Math.round(base * (combo>1 ? 1.45 : 1));
+  score += bonus;
+ }else{
+  combo = 0;
+ }
 }
 
+// ===== ゴースト位置 =====
 function ghostPos(p){
- let gx=Math.round(p.x/SIZE)*SIZE;
- let gy=Math.round((p.y-OFFSET_Y)/SIZE)*SIZE+OFFSET_Y;
- return {x:gx,y:gy};
+ return {
+  x: Math.round(p.x / SIZE) * SIZE,
+  y: Math.round((p.y-OFFSET_Y)/SIZE)*SIZE + OFFSET_Y
+ };
 }
 
+// ===== 描画全体 =====
 function draw(){
  ctx.clearRect(0,0,W,H);
 
- // グリッド（点線）
+ // タイトル
+ ctx.fillStyle="white";
+ ctx.font=`bold ${SIZE*0.7}px sans-serif`;
+ ctx.fillText("ブロック崩し", 10, SIZE);
+
+ // 点線グリッド
  ctx.setLineDash([5,5]);
  ctx.strokeStyle="#444";
  for(let i=0;i<=GRID;i++){
   ctx.beginPath();
-  ctx.moveTo(i*SIZE,OFFSET_Y);
-  ctx.lineTo(i*SIZE,OFFSET_Y+GRID*SIZE);
+  ctx.moveTo(i*SIZE, OFFSET_Y);
+  ctx.lineTo(i*SIZE, OFFSET_Y+GRID*SIZE);
   ctx.stroke();
+
   ctx.beginPath();
-  ctx.moveTo(0,OFFSET_Y+i*SIZE);
-  ctx.lineTo(GRID*SIZE,OFFSET_Y+i*SIZE);
+  ctx.moveTo(0, OFFSET_Y+i*SIZE);
+  ctx.lineTo(GRID*SIZE, OFFSET_Y+i*SIZE);
   ctx.stroke();
  }
  ctx.setLineDash([]);
 
- // ボード
+ // 固定ブロック
  for(let y=0;y<GRID;y++){
   for(let x=0;x<GRID;x++){
-   if(board[y][x]) drawCell(x*SIZE,OFFSET_Y+y*SIZE,SIZE,"#4caf50");
+   if(board[y][x]){
+    drawCell(x*SIZE, OFFSET_Y+y*SIZE, SIZE, "#4caf50");
+   }
   }
  }
 
  // ゴースト
  if(dragging){
-  const g=ghostPos(dragging.p);
+  const g = ghostPos(dragging.p);
   if(canPlace(g.x,g.y,dragging.p.shape)){
    ctx.globalAlpha=0.4;
    dragging.p.shape.forEach((r,y)=>r.forEach((v,x)=>{
-    if(v) drawCell(g.x+x*SIZE,g.y+y*SIZE,SIZE,"#aaa");
+    if(v) drawCell(g.x+x*SIZE, g.y+y*SIZE, SIZE, "#aaa");
    }));
    ctx.globalAlpha=1;
   }
  }
 
- // ピース
+ // 手持ちブロック
  pieces.forEach(p=>{
-  const s=(p.y>=SLOT_Y)?SIZE*SLOT_SCALE:SIZE;
+  const s = (p.y>=SLOT_Y)? SIZE*SLOT_SCALE : SIZE;
   p.shape.forEach((r,y)=>r.forEach((v,x)=>{
-   if(v) drawCell(p.x+x*s,p.y+y*s,s,"#fbc02d");
+   if(v) drawCell(p.x+x*s, p.y+y*s, s, "#fbc02d");
   }));
  });
 
  // スコア
  ctx.fillStyle="white";
- ctx.font=`${SIZE*0.6}px sans-serif`;
- ctx.fillText("SCORE: "+score,10,SIZE*0.8);
+ ctx.font=`${SIZE*0.5}px sans-serif`;
+ ctx.fillText("SCORE: "+score, 10, OFFSET_Y+GRID*SIZE+SIZE*0.7);
+
+ if(combo>1){
+  ctx.fillText("COMBO x"+combo, 10, OFFSET_Y+GRID*SIZE+SIZE*1.3);
+ }
 }
 
+// ===== 入力 =====
 canvas.addEventListener("pointerdown",e=>{
  const r=canvas.getBoundingClientRect();
- const mx=e.clientX-r.left,my=e.clientY-r.top;
+ const mx=e.clientX-r.left, my=e.clientY-r.top;
  pieces.forEach(p=>{
   const s=(p.y>=SLOT_Y)?SIZE*SLOT_SCALE:SIZE;
-  const w=p.shape[0].length*s,h=p.shape.length*s;
+  const w=p.shape[0].length*s, h=p.shape.length*s;
   if(mx>p.x&&mx<p.x+w&&my>p.y&&my<p.y+h){
    dragging={p,ox:mx-p.x,oy:my-p.y};
   }
@@ -202,6 +241,7 @@ canvas.addEventListener("pointerup",()=>{
  if(!dragging) return;
  const p=dragging.p;
  const g=ghostPos(p);
+
  if(canPlace(g.x,g.y,p.shape)){
   place(g.x,g.y,p.shape);
   pieces=pieces.filter(x=>x!==p);
@@ -210,9 +250,11 @@ canvas.addEventListener("pointerup",()=>{
  }else{
   p.y=SLOT_Y;
  }
+
  dragging=null;
 });
 
+// ===== ループ =====
 function loop(){
  draw();
  requestAnimationFrame(loop);

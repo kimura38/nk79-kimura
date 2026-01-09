@@ -18,41 +18,22 @@ canvas{
 <canvas id="game" width="480" height="270"></canvas>
 
 <script>
-const c = document.getElementById("game");
-const ctx = c.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
 //================ 状態 =================
 let scene = "title"; // title settings game pause
-let language = "jp"; // jp en
-let control  = "button"; // button keyboard
+let language = "jp";
+let control = "button"; // button keyboard
 let touches = [];
+let keys = {};
 
 //================ テキスト =================
-const TEXT = {
- jp:{
-  title:"2Dアクションゲーム",
-  play:"プレイ",
-  settings:"設定",
-  lang:"言語",
-  control:"操作方法",
-  back:"戻る",
-  pause:"一時停止",
-  resume:"再開",
-  retry:"やり直し",
-  totitle:"タイトルへ"
- },
- en:{
-  title:"2D Action Game",
-  play:"Play",
-  settings:"Settings",
-  lang:"Language",
-  control:"Controls",
-  back:"Back",
-  pause:"Pause",
-  resume:"Resume",
-  retry:"Retry",
-  totitle:"Title"
- }
+const TEXT={
+ jp:{title:"2Dアクションゲーム",play:"プレイ",back:"戻る",
+     lang:"言語",control:"操作",resume:"再開",retry:"やり直し",totitle:"タイトルへ"},
+ en:{title:"2D Action Game",play:"Play",back:"Back",
+     lang:"Language",control:"Controls",resume:"Resume",retry:"Retry",totitle:"Title"}
 };
 
 //================ プレイヤー =================
@@ -74,15 +55,12 @@ const goal={
 
 const GRAVITY=0.6,SPEED=3,JUMP=-10;
 
-//================ タッチ =================
+//================ 入力 =================
 function updateTouches(e){
- const r=c.getBoundingClientRect();
- touches=[...e.touches].map(t=>({
-  x:t.clientX-r.left,
-  y:t.clientY-r.top
- }));
+ const r=canvas.getBoundingClientRect();
+ touches=[...e.touches].map(t=>({x:t.clientX-r.left,y:t.clientY-r.top}));
 }
-c.addEventListener("touchstart",e=>{
+canvas.addEventListener("touchstart",e=>{
  updateTouches(e);
 
  if(scene==="title"){
@@ -90,8 +68,12 @@ c.addEventListener("touchstart",e=>{
   if(hitBox(430,10,40,25)) scene="settings";
  }
 });
-c.addEventListener("touchmove",updateTouches);
-c.addEventListener("touchend",updateTouches);
+canvas.addEventListener("touchmove",updateTouches);
+canvas.addEventListener("touchend",updateTouches);
+
+// キーボード
+window.addEventListener("keydown",e=>keys[e.key]=true);
+window.addEventListener("keyup",e=>keys[e.key]=false);
 
 //================ 判定 =================
 function hit(a,b){
@@ -112,7 +94,7 @@ function reset(){
 function update(){
  if(scene!=="game") return;
 
- // 移動（ボタン）
+ // ===== 操作 =====
  if(control==="button"){
   if(hitBox(20,210,40,40)) player.vx=-SPEED;
   else if(hitBox(70,210,40,40)) player.vx=SPEED;
@@ -123,9 +105,20 @@ function update(){
   }
  }
 
+ if(control==="keyboard"){
+  if(keys["ArrowLeft"]||keys["a"]) player.vx=-SPEED;
+  else if(keys["ArrowRight"]||keys["d"]) player.vx=SPEED;
+  else player.vx=0;
+
+  if(keys["Enter"]&&player.onGround){
+   player.vy=JUMP;
+  }
+ }
+
  // 一時停止
  if(hitBox(430,10,40,25)) scene="pause";
 
+ // 物理
  player.vy+=GRAVITY;
  player.x+=player.vx;
  player.y+=player.vy;
@@ -139,6 +132,7 @@ function update(){
   }
  });
 
+ // ゴール（先に進めない）
  if(hit(player,goal.pole)||hit(player,goal.flag)){
   player.x=goal.pole.x-player.w;
  }
@@ -147,13 +141,13 @@ function update(){
 }
 
 //================ 描画 =================
-function button(x,y,w,h,text){
- ctx.fillStyle="#2e8b57";
+function drawButton(x,y,w,h,text){
+ ctx.fillStyle="#777";          // 灰色
  ctx.fillRect(x,y,w,h);
  ctx.strokeStyle="white";
  ctx.strokeRect(x,y,w,h);
  ctx.fillStyle="white";
- ctx.font="16px sans-serif";
+ ctx.font="18px sans-serif";
  ctx.fillText(text,x+w/2-ctx.measureText(text).width/2,y+h/2+6);
 }
 
@@ -161,7 +155,7 @@ function draw(){
  ctx.clearRect(0,0,480,270);
  const T=TEXT[language];
 
- // ===== タイトル =====
+ // タイトル
  if(scene==="title"){
   ctx.fillStyle="#5c94fc";
   ctx.fillRect(0,0,480,200);
@@ -172,16 +166,16 @@ function draw(){
   ctx.font="26px sans-serif";
   ctx.fillText(T.title,80,100);
 
-  button(140,160,200,40,T.play);
-  button(430,10,40,25,"⚙");
+  drawButton(140,160,200,40,T.play);
+  drawButton(430,10,40,25,"⚙");
   return;
  }
 
- // ===== 設定 =====
+ // 設定
  if(scene==="settings"){
-  button(140,60,200,40,`${T.lang}: ${language}`);
-  button(140,110,200,40,`${T.control}: ${control}`);
-  button(140,180,200,40,T.back);
+  drawButton(140,60,200,40,`${T.lang}: ${language}`);
+  drawButton(140,110,200,40,`${T.control}: ${control}`);
+  drawButton(140,180,200,40,T.back);
 
   if(hitBox(140,60,200,40)) language=language==="jp"?"en":"jp";
   if(hitBox(140,110,200,40)) control=control==="button"?"keyboard":"button";
@@ -189,11 +183,11 @@ function draw(){
   return;
  }
 
- // ===== ポーズ =====
+ // ポーズ
  if(scene==="pause"){
-  button(140,80,200,40,T.resume);
-  button(140,130,200,40,T.retry);
-  button(140,180,200,40,T.totitle);
+  drawButton(140,80,200,40,T.resume);
+  drawButton(140,130,200,40,T.retry);
+  drawButton(140,180,200,40,T.totitle);
 
   if(hitBox(140,80,200,40)) scene="game";
   if(hitBox(140,130,200,40)){ reset(); scene="game"; }
@@ -201,7 +195,7 @@ function draw(){
   return;
  }
 
- // ===== ゲーム =====
+ // ゲーム
  ctx.save();
  ctx.translate(-cameraX,0);
 
@@ -219,10 +213,10 @@ function draw(){
  ctx.restore();
 
  // UI
- button(430,10,40,25,"Ⅱ");
- button(20,210,40,40,"◀");
- button(70,210,40,40,"▶");
- button(400,210,50,40,"⬆");
+ drawButton(430,10,40,25,"Ⅱ");
+ drawButton(20,210,40,40,"◀");
+ drawButton(70,210,40,40,"▶");
+ drawButton(400,210,50,40,"⬆");
 }
 
 //================ ループ =================

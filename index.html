@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <title>Block Blast</title>
 <style>
-body{
+html,body{
  margin:0;
+ width:100%;
+ height:100%;
  background:#111;
- display:flex;
- justify-content:center;
- align-items:center;
- height:100vh;
+ overflow:hidden;
 }
 canvas{
+ display:block;
  background:#222;
  touch-action:none;
 }
@@ -20,22 +20,19 @@ canvas{
 </head>
 <body>
 
-<canvas id="game" width="360" height="500"></canvas>
+<canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const GRID = 8;
-const SIZE = 40;
-const OFFSET_Y = 20;
-const SLOT_Y = 380;
+let W,H,SIZE,OFFSET_Y,SLOT_Y,SLOT_SCALE=0.6;
+const GRID=8;
 
-let board = Array.from({length:GRID},()=>Array(GRID).fill(0));
-let pieces = [];
-let dragging = null;
+let board, pieces, dragging=null, score=0;
 
-const SHAPES = [
+// 形
+const SHAPES=[
  [[1]],
  [[1,1]],
  [[1],[1]],
@@ -45,141 +42,177 @@ const SHAPES = [
  [[1,1,1],[0,1,0]]
 ];
 
+function resize(){
+ W=innerWidth;
+ H=innerHeight;
+ canvas.width=W;
+ canvas.height=H;
+ SIZE=Math.min(W/(GRID+1),H/14);
+ OFFSET_Y=SIZE;
+ SLOT_Y=OFFSET_Y+GRID*SIZE+SIZE*0.8;
+}
+window.addEventListener("resize",resize);
+resize();
+
+function reset(){
+ board=Array.from({length:GRID},()=>Array(GRID).fill(0));
+ score=0;
+ newPieces();
+}
+reset();
+
 function newPieces(){
- pieces = [];
+ pieces=[];
  for(let i=0;i<3;i++){
   pieces.push({
-   shape: SHAPES[Math.floor(Math.random()*SHAPES.length)],
-   x: 60 + i*110,
-   y: SLOT_Y
+   shape:SHAPES[Math.floor(Math.random()*SHAPES.length)],
+   x:W/2+(i-1)*SIZE*3,
+   y:SLOT_Y
   });
  }
 }
 
-function drawCell(x,y,color){
+function drawCell(x,y,s,color){
  ctx.fillStyle=color;
- ctx.fillRect(x,y,SIZE,SIZE);
+ ctx.fillRect(x,y,s,s);
  ctx.strokeStyle="#333";
- ctx.strokeRect(x,y,SIZE,SIZE);
-}
-
-function draw(){
- ctx.clearRect(0,0,360,500);
-
- // ボード
- for(let y=0;y<GRID;y++){
-  for(let x=0;x<GRID;x++){
-   drawCell(x*SIZE, y*SIZE+OFFSET_Y,
-    board[y][x] ? "#4caf50" : "#333");
-  }
- }
-
- // ピース
- pieces.forEach(p=>{
-  p.shape.forEach((row,y)=>{
-   row.forEach((v,x)=>{
-    if(v){
-     drawCell(p.x+x*SIZE, p.y+y*SIZE, "#fbc02d");
-    }
-   });
-  });
- });
-
- // ラベル
- ctx.fillStyle="white";
- ctx.font="16px sans-serif";
- ctx.fillText("置いて消そう", 10, 15);
+ ctx.strokeRect(x,y,s,s);
 }
 
 function canPlace(px,py,shape){
  for(let y=0;y<shape.length;y++){
   for(let x=0;x<shape[y].length;x++){
    if(shape[y][x]){
-    let gx = Math.floor((px+x*SIZE)/SIZE);
-    let gy = Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
-    if(gx<0||gx>=GRID||gy<0||gy>=GRID||board[gy][gx]){
-     return false;
-    }
+    let gx=Math.floor((px+x*SIZE)/SIZE);
+    let gy=Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
+    if(gx<0||gx>=GRID||gy<0||gy>=GRID||board[gy][gx]) return false;
    }
   }
  }
  return true;
 }
 
-function place(px,py,piece){
- piece.shape.forEach((row,y)=>{
-  row.forEach((v,x)=>{
-   if(v){
-    let gx = Math.floor((px+x*SIZE)/SIZE);
-    let gy = Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
-    board[gy][gx]=1;
-   }
-  });
- });
+function place(px,py,shape){
+ shape.forEach((r,y)=>r.forEach((v,x)=>{
+  if(v){
+   let gx=Math.floor((px+x*SIZE)/SIZE);
+   let gy=Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
+   board[gy][gx]=1;
+  }
+ }));
 }
 
 function clearLines(){
- let cleared = false;
+ let cleared=0;
 
  for(let y=0;y<GRID;y++){
   if(board[y].every(v=>v)){
    board[y].fill(0);
-   cleared = true;
+   cleared++;
   }
  }
-
  for(let x=0;x<GRID;x++){
-  let full = true;
-  for(let y=0;y<GRID;y++){
-   if(!board[y][x]) full=false;
-  }
+  let full=true;
+  for(let y=0;y<GRID;y++) if(!board[y][x]) full=false;
   if(full){
    for(let y=0;y<GRID;y++) board[y][x]=0;
-   cleared = true;
+   cleared++;
+  }
+ }
+ if(cleared>0) score+=cleared*100;
+}
+
+function ghostPos(p){
+ let gx=Math.round(p.x/SIZE)*SIZE;
+ let gy=Math.round((p.y-OFFSET_Y)/SIZE)*SIZE+OFFSET_Y;
+ return {x:gx,y:gy};
+}
+
+function draw(){
+ ctx.clearRect(0,0,W,H);
+
+ // グリッド（点線）
+ ctx.setLineDash([5,5]);
+ ctx.strokeStyle="#444";
+ for(let i=0;i<=GRID;i++){
+  ctx.beginPath();
+  ctx.moveTo(i*SIZE,OFFSET_Y);
+  ctx.lineTo(i*SIZE,OFFSET_Y+GRID*SIZE);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0,OFFSET_Y+i*SIZE);
+  ctx.lineTo(GRID*SIZE,OFFSET_Y+i*SIZE);
+  ctx.stroke();
+ }
+ ctx.setLineDash([]);
+
+ // ボード
+ for(let y=0;y<GRID;y++){
+  for(let x=0;x<GRID;x++){
+   if(board[y][x]) drawCell(x*SIZE,OFFSET_Y+y*SIZE,SIZE,"#4caf50");
   }
  }
 
- return cleared;
+ // ゴースト
+ if(dragging){
+  const g=ghostPos(dragging.p);
+  if(canPlace(g.x,g.y,dragging.p.shape)){
+   ctx.globalAlpha=0.4;
+   dragging.p.shape.forEach((r,y)=>r.forEach((v,x)=>{
+    if(v) drawCell(g.x+x*SIZE,g.y+y*SIZE,SIZE,"#aaa");
+   }));
+   ctx.globalAlpha=1;
+  }
+ }
+
+ // ピース
+ pieces.forEach(p=>{
+  const s=(p.y>=SLOT_Y)?SIZE*SLOT_SCALE:SIZE;
+  p.shape.forEach((r,y)=>r.forEach((v,x)=>{
+   if(v) drawCell(p.x+x*s,p.y+y*s,s,"#fbc02d");
+  }));
+ });
+
+ // スコア
+ ctx.fillStyle="white";
+ ctx.font=`${SIZE*0.6}px sans-serif`;
+ ctx.fillText("SCORE: "+score,10,SIZE*0.8);
 }
 
 canvas.addEventListener("pointerdown",e=>{
- const r = canvas.getBoundingClientRect();
- const mx = e.clientX - r.left;
- const my = e.clientY - r.top;
-
+ const r=canvas.getBoundingClientRect();
+ const mx=e.clientX-r.left,my=e.clientY-r.top;
  pieces.forEach(p=>{
-  const w = p.shape[0].length * SIZE;
-  const h = p.shape.length * SIZE;
-  if(mx>p.x && mx<p.x+w && my>p.y && my<p.y+h){
-   dragging = {p, ox:mx-p.x, oy:my-p.y};
+  const s=(p.y>=SLOT_Y)?SIZE*SLOT_SCALE:SIZE;
+  const w=p.shape[0].length*s,h=p.shape.length*s;
+  if(mx>p.x&&mx<p.x+w&&my>p.y&&my<p.y+h){
+   dragging={p,ox:mx-p.x,oy:my-p.y};
   }
  });
 });
 
 canvas.addEventListener("pointermove",e=>{
  if(!dragging) return;
- const r = canvas.getBoundingClientRect();
- dragging.p.x = e.clientX - r.left - dragging.ox;
- dragging.p.y = e.clientY - r.top - dragging.oy;
+ const r=canvas.getBoundingClientRect();
+ dragging.p.x=e.clientX-r.left-dragging.ox;
+ dragging.p.y=e.clientY-r.top-dragging.oy;
 });
 
 canvas.addEventListener("pointerup",()=>{
  if(!dragging) return;
- const p = dragging.p;
-
- if(canPlace(p.x,p.y,p.shape)){
-  place(p.x,p.y,p);
-  pieces = pieces.filter(x=>x!==p);
+ const p=dragging.p;
+ const g=ghostPos(p);
+ if(canPlace(g.x,g.y,p.shape)){
+  place(g.x,g.y,p.shape);
+  pieces=pieces.filter(x=>x!==p);
   clearLines();
   if(pieces.length===0) newPieces();
  }else{
-  p.x = 60 + pieces.indexOf(p)*110;
-  p.y = SLOT_Y;
+  p.y=SLOT_Y;
  }
- dragging = null;
+ dragging=null;
 });
 
-newPieces();
 function loop(){
  draw();
  requestAnimationFrame(loop);

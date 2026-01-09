@@ -47,7 +47,7 @@ const GRID = 8;
 let W,H,SIZE,OFFSET_Y,SLOT_Y;
 const SLOT_SCALE = 0.7;
 
-let board, pieces, dragging=null;
+let board, colorBoard, pieces, dragging=null;
 let score = 0;
 let combo = 0;
 let bugMode = false;
@@ -69,17 +69,24 @@ function randomColor(){ return '#'+Math.floor(Math.random()*16777215).toString(1
 
 // ===== 画面サイズ =====
 function resize(){
- W = Math.min(innerWidth, 480);
- H = innerHeight;
+ W = window.innerWidth;
+ H = window.innerHeight;
  canvas.width = W;
  canvas.height = H;
 
  SIZE = Math.floor(W / (GRID + 1));
  OFFSET_Y = SIZE * 1.5;
  SLOT_Y = OFFSET_Y + GRID * SIZE + SIZE*0.6;
+
+ // 下のブロック位置調整
+ if(pieces){
+   pieces.forEach((p,i)=>{
+     p.y = SLOT_Y;
+     p.x = W/2 + (i-1)*SIZE*3;
+   });
+ }
 }
 window.addEventListener("resize", resize);
-resize();
 
 // ===== 初期化 =====
 function reset(){
@@ -91,6 +98,7 @@ function reset(){
  newPieces();
 }
 reset();
+resize();
 
 // ===== 新ブロック =====
 function newPieces(){
@@ -170,7 +178,7 @@ function clearLines(){
   let bonus = Math.round(base * (combo>1 ? 1.45 : 1));
   score += bonus;
   if(bugMode){
-   // バグモードで増殖
+   // バグモードでブロック増殖
    for(let i=0;i<cleared;i++){
      const r = Math.floor(Math.random()*GRID);
      const c = Math.floor(Math.random()*GRID);
@@ -195,7 +203,7 @@ function ghostPos(p){
 function draw(){
  ctx.clearRect(0,0,W,H);
 
- // バグモード時はカオス
+ // バグモードカオス
  if(bugMode){
   for(let y=0;y<GRID;y++){
    for(let x=0;x<GRID;x++){

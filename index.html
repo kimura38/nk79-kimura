@@ -51,6 +51,7 @@ let board, pieces, dragging=null;
 let score = 0;
 let combo = 0;
 let bugMode = false;
+let gameOver = false;
 
 // ===== ブロック形 =====
 const SHAPES = [
@@ -62,6 +63,9 @@ const SHAPES = [
  [[1,1],[1,1]],
  [[1,1,1],[0,1,0]]
 ];
+
+// ===== 色 =====
+function randomColor(){ return '#'+Math.floor(Math.random()*16777215).toString(16); }
 
 // ===== 画面サイズ =====
 function resize(){
@@ -80,8 +84,10 @@ resize();
 // ===== 初期化 =====
 function reset(){
  board = Array.from({length:GRID},()=>Array(GRID).fill(0));
+ colorBoard = Array.from({length:GRID},()=>Array(GRID).fill("#4caf50"));
  score = 0;
  combo = 0;
+ gameOver = false;
  newPieces();
 }
 reset();
@@ -90,8 +96,11 @@ reset();
 function newPieces(){
  pieces=[];
  for(let i=0;i<3;i++){
+  const shape = SHAPES[Math.floor(Math.random()*SHAPES.length)];
+  const color = randomColor();
   pieces.push({
-   shape: SHAPES[Math.floor(Math.random()*SHAPES.length)],
+   shape: shape,
+   color: color,
    x: W/2 + (i-1)*SIZE*3,
    y: SLOT_Y
   });
@@ -120,12 +129,13 @@ function canPlace(px,py,shape){
  return true;
 }
 
-function place(px,py,shape){
- shape.forEach((r,y)=>r.forEach((v,x)=>{
+function place(px,py,piece){
+ piece.shape.forEach((r,y)=>r.forEach((v,x)=>{
   if(v){
    let gx=Math.floor((px+x*SIZE)/SIZE);
    let gy=Math.floor((py+y*SIZE-OFFSET_Y)/SIZE);
    board[gy][gx]=1;
+   colorBoard[gy][gx]=piece.color;
   }
  }));
 }
@@ -137,6 +147,7 @@ function clearLines(){
  for(let y=0;y<GRID;y++){
   if(board[y].every(v=>v)){
    board[y].fill(0);
+   for(let x=0;x<GRID;x++) colorBoard[y][x]=randomColor();
    cleared++;
   }
  }
@@ -145,16 +156,28 @@ function clearLines(){
   let full=true;
   for(let y=0;y<GRID;y++) if(!board[y][x]) full=false;
   if(full){
-   for(let y=0;y<GRID;y++) board[y][x]=0;
+   for(let y=0;y<GRID;y++){
+     board[y][x]=0;
+     colorBoard[y][x]=randomColor();
+   }
    cleared++;
   }
  }
 
  if(cleared > 0){
   combo++;
-  const base = cleared * 100;
-  const bonus = Math.round(base * (combo>1 ? 1.45 : 1));
+  let base = cleared * 100;
+  let bonus = Math.round(base * (combo>1 ? 1.45 : 1));
   score += bonus;
+  if(bugMode){
+   // バグモードで増殖
+   for(let i=0;i<cleared;i++){
+     const r = Math.floor(Math.random()*GRID);
+     const c = Math.floor(Math.random()*GRID);
+     board[r][c]=1;
+     colorBoard[r][c]=randomColor();
+   }
+  }
  }else{
   combo = 0;
  }
@@ -172,7 +195,7 @@ function ghostPos(p){
 function draw(){
  ctx.clearRect(0,0,W,H);
 
- // バグモード時は全部ランダム
+ // バグモード時はカオス
  if(bugMode){
   for(let y=0;y<GRID;y++){
    for(let x=0;x<GRID;x++){
@@ -187,8 +210,8 @@ function draw(){
   pieces.forEach(p=>{
    p.shape.forEach((r,y)=>r.forEach((v,x)=>{
     if(v){
-     drawCell(p.x + x*SIZE + Math.random()*20-10,
-              p.y + y*SIZE + Math.random()*20-10,
+     drawCell(p.x + x*SIZE + Math.random()*40-20,
+              p.y + y*SIZE + Math.random()*40-20,
               SIZE, '#'+Math.floor(Math.random()*16777215).toString(16));
     }
    }));
@@ -223,7 +246,9 @@ function draw(){
 // 固定ブロック
  for(let y=0;y<GRID;y++){
   for(let x=0;x<GRID;x++){
-   if(board[y][x]) drawCell(x*SIZE, OFFSET_Y+y*SIZE, SIZE, "#4caf50");
+   if(board[y][x]){
+    drawCell(x*SIZE, OFFSET_Y+y*SIZE, SIZE, colorBoard[y][x]);
+   }
   }
  }
 
@@ -233,7 +258,7 @@ function draw(){
   if(canPlace(g.x,g.y,dragging.p.shape)){
    ctx.globalAlpha=0.4;
    dragging.p.shape.forEach((r,y)=>r.forEach((v,x)=>{
-    if(v) drawCell(g.x+x*SIZE, g.y+y*SIZE, SIZE, "#aaa");
+    if(v) drawCell(g.x+x*SIZE, g.y+y*SIZE, SIZE, dragging.p.color);
    }));
    ctx.globalAlpha=1;
   }
@@ -243,7 +268,7 @@ function draw(){
  pieces.forEach(p=>{
   const s = (p.y>=SLOT_Y)? SIZE*SLOT_SCALE : SIZE;
   p.shape.forEach((r,y)=>r.forEach((v,x)=>{
-   if(v) drawCell(p.x+x*s, p.y+y*s, s, "#fbc02d");
+   if(v) drawCell(p.x+x*s, p.y+y*s, s, p.color);
   }));
  });
 
@@ -256,10 +281,20 @@ function draw(){
  if(combo>1){
   ctx.fillText("COMBO x"+combo, 10, OFFSET_Y+GRID*SIZE+SIZE*1.3);
  }
+
+// ゲームオーバー
+ if(gameOver){
+  ctx.fillStyle="rgba(0,0,0,0.7)";
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="white";
+  ctx.font="40px sans-serif";
+  ctx.fillText("GAME OVER",W/6,H/2);
+ }
 }
 
 // ===== 入力 =====
 canvas.addEventListener("pointerdown",e=>{
+ if(gameOver) return;
  const r=canvas.getBoundingClientRect();
  const mx=e.clientX-r.left, my=e.clientY-r.top;
  pieces.forEach(p=>{
@@ -279,12 +314,13 @@ canvas.addEventListener("pointermove",e=>{
 });
 
 canvas.addEventListener("pointerup",()=>{
+ if(gameOver) return;
  if(!dragging) return;
  const p=dragging.p;
  const g=ghostPos(p);
 
  if(canPlace(g.x,g.y,p.shape)){
-  place(g.x,g.y,p.shape);
+  place(g.x,g.y,p);
   pieces=pieces.filter(x=>x!==p);
   clearLines();
   if(pieces.length===0) newPieces();
@@ -292,15 +328,24 @@ canvas.addEventListener("pointerup",()=>{
   p.y=SLOT_Y;
  }
 
+ // ゲームオーバー判定
+ let canAnyPlace=false;
+ for(let i=0;i<pieces.length;i++){
+  if(canPlace(pieces[i].x,pieces[i].y,pieces[i].shape)){
+   canAnyPlace=true; break;
+  }
+ }
+ if(!canAnyPlace) gameOver=true;
+
  dragging=null;
 });
 
 // ===== ⭐︎ボタン =====
 starBtn.addEventListener("click",()=>{
  const code = prompt("ボーナスコードを入力");
- if(code === "11451419194545810"){
+ if(code === "810senpai"){
   bugMode = true;
-  alert("バグモード発動！");
+  alert("バグモード発動！めちゃくちゃになる！");
  }
 });
 

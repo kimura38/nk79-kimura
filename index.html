@@ -31,7 +31,7 @@ const TEXT = {
   control:"操作方法",
   button:"ボタン",
   keyboard:"キーボード",
-  keys:"← → 移動 / Space ジャンプ",
+  keys:"← → 移動 / Enter ジャンプ",
   back:"もどる",
   resume:"再開",
   retry:"やり直し",
@@ -45,7 +45,7 @@ const TEXT = {
   control:"CONTROL",
   button:"BUTTON",
   keyboard:"KEYBOARD",
-  keys:"← → Move / Space Jump",
+  keys:"← → Move / Enter Jump",
   back:"BACK",
   resume:"RESUME",
   retry:"RETRY",
@@ -108,16 +108,22 @@ canvas.addEventListener("touchstart",e=>{
 
  if(scene==="game"){
   if(x>430 && y<40){ scene="pause"; return; }
+
   if(control==="button"){
-   if(x<120 && y>200) player.vx=-SPEED;
-   if(x>120 && x<240 && y>200) player.vx=SPEED;
-   if(x>360 && y>200 && player.onGround) player.vy=JUMP;
+   // ◀ 左
+   if(x<120 && y>200) player.vx = -SPEED;
+   // ▶ 右（←ここ修正）
+   if(x>120 && x<240 && y>200) player.vx = SPEED;
+   // ⬆ ジャンプ
+   if(x>360 && y>200 && player.onGround) player.vy = JUMP;
   }
  }
 });
 
 canvas.addEventListener("touchend",()=>{
- if(scene==="game" && control==="button") player.vx=0;
+ if(scene==="game" && control==="button"){
+  player.vx = 0;
+ }
 });
 
 //================ 処理 =================
@@ -135,30 +141,32 @@ function hit(a,b){
 function update(){
  if(scene!=="game") return;
 
+ // キーボード操作（Enterでジャンプ）
  if(control==="keyboard"){
-  if(keys["ArrowLeft"]) player.vx=-SPEED;
-  else if(keys["ArrowRight"]) player.vx=SPEED;
-  else player.vx=0;
-  if(keys[" "] && player.onGround) player.vy=JUMP;
+  if(keys["ArrowLeft"]) player.vx = -SPEED;
+  else if(keys["ArrowRight"]) player.vx = SPEED;
+  else player.vx = 0;
+
+  if(keys["Enter"] && player.onGround) player.vy = JUMP;
  }
 
- player.vy+=GRAVITY;
- player.x+=player.vx;
- player.y+=player.vy;
- player.onGround=false;
+ player.vy += GRAVITY;
+ player.x  += player.vx;
+ player.y  += player.vy;
+ player.onGround = false;
 
  platforms.forEach(p=>{
-  if(hit(player,p)&&player.vy>0){
-   player.y=p.y-player.h;
-   player.vy=0;
-   player.onGround=true;
+  if(hit(player,p) && player.vy>0){
+   player.y = p.y - player.h;
+   player.vy = 0;
+   player.onGround = true;
   }
  });
 
  cameraX = player.x - 200;
  if(cameraX < 0) cameraX = 0;
 
- if(player.y>canvas.height) reset();
+ if(player.y > canvas.height) reset();
 }
 
 //================ 描画 =================
@@ -177,7 +185,6 @@ function draw(){
  const T=TEXT[language];
 
  if(scene==="title"){
-  // 背景
   ctx.fillStyle="#5c94fc";
   ctx.fillRect(0,0,480,200);
   ctx.fillStyle="#228B22";

@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>2Dアクション</title>
+<title>2D Action Game</title>
 <style>
 body{margin:0;background:black;}
 canvas{
@@ -25,19 +25,44 @@ const ctx = canvas.getContext("2d");
 let scene="title"; // title settings game pause goal
 let language="jp";
 let control="button";
-let touches=[];
+let pointers=[];   // ← タッチ＋マウス共通
 let keys={};
 
-//================ テキスト =================
+//================ 言語辞書 =================
 const TEXT={
  jp:{
   title:"2Dアクションゲーム",
   play:"プレイ",
+  settings:"設定",
   back:"戻る",
-  goal:"ゴール！",
-  totitle:"タイトルに戻る",
   lang:"言語",
-  control:"操作方法"
+  control:"操作方法",
+  pause:"一時停止",
+  resume:"再開",
+  retry:"やり直し",
+  totitle:"タイトルへ",
+  goal:"ゴール！",
+  kbTitle:"キーボード操作",
+  left:"← / A ：左移動",
+  right:"→ / D ：右移動",
+  jump:"Enter ：ジャンプ"
+ },
+ en:{
+  title:"2D Action Game",
+  play:"Play",
+  settings:"Settings",
+  back:"Back",
+  lang:"Language",
+  control:"Controls",
+  pause:"Pause",
+  resume:"Resume",
+  retry:"Retry",
+  totitle:"Back to Title",
+  goal:"GOAL!",
+  kbTitle:"Keyboard Controls",
+  left:"← / A : Move Left",
+  right:"→ / D : Move Right",
+  jump:"Enter : Jump"
  }
 };
 
@@ -60,22 +85,32 @@ const goalObj={
 
 const GRAVITY=0.6,SPEED=3,JUMP=-10;
 
-//================ 入力 =================
-function updateTouches(e){
+//================ 入力（タッチ） =================
+function setPointersFromEvent(e){
  const r=canvas.getBoundingClientRect();
- touches=[...e.touches].map(t=>({x:t.clientX-r.left,y:t.clientY-r.top}));
+ pointers=[...e.touches].map(t=>({
+  x:t.clientX-r.left,
+  y:t.clientY-r.top
+ }));
 }
-canvas.addEventListener("touchstart",e=>{
- updateTouches(e);
+canvas.addEventListener("touchstart",setPointersFromEvent);
+canvas.addEventListener("touchmove",setPointersFromEvent);
+canvas.addEventListener("touchend",()=>pointers=[]);
 
- if(scene==="title"){
-  if(hitBox(140,160,200,40)){ reset(); scene="game"; }
-  if(hitBox(430,10,40,25)) scene="settings";
+//================ 入力（マウス） =================
+canvas.addEventListener("mousedown",e=>{
+ const r=canvas.getBoundingClientRect();
+ pointers=[{x:e.clientX-r.left,y:e.clientY-r.top}];
+});
+canvas.addEventListener("mousemove",e=>{
+ if(pointers.length){
+  const r=canvas.getBoundingClientRect();
+  pointers=[{x:e.clientX-r.left,y:e.clientY-r.top}];
  }
 });
-canvas.addEventListener("touchmove",updateTouches);
-canvas.addEventListener("touchend",updateTouches);
+window.addEventListener("mouseup",()=>pointers=[]);
 
+//================ キーボード =================
 window.addEventListener("keydown",e=>keys[e.key]=true);
 window.addEventListener("keyup",e=>keys[e.key]=false);
 
@@ -84,7 +119,7 @@ function hit(a,b){
  return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 }
 function hitBox(x,y,w,h){
- return touches.some(t=>t.x>=x&&t.x<=x+w&&t.y>=y&&t.y<=y+h);
+ return pointers.some(p=>p.x>=x&&p.x<=x+w&&p.y>=y&&p.y<=y+h);
 }
 
 //================ リセット =================
@@ -137,7 +172,7 @@ function update(){
   }
  });
 
- // ゴール判定
+ // ゴール
  if(hit(player,goalObj.pole)||hit(player,goalObj.flag)){
   scene="goal";
  }
@@ -158,7 +193,7 @@ function drawButton(x,y,w,h,text){
 
 function draw(){
  ctx.clearRect(0,0,480,270);
- const T=TEXT.jp;
+ const T=TEXT[language];
 
  // タイトル
  if(scene==="title"){
@@ -166,13 +201,15 @@ function draw(){
   ctx.fillRect(0,0,480,200);
   ctx.fillStyle="#228b22";
   ctx.fillRect(0,200,480,70);
-
   ctx.fillStyle="white";
   ctx.font="26px sans-serif";
   ctx.fillText(T.title,80,100);
 
   drawButton(140,160,200,40,T.play);
   drawButton(430,10,40,25,"⚙");
+
+  if(hitBox(140,160,200,40)){ reset(); scene="game"; }
+  if(hitBox(430,10,40,25)) scene="settings";
   return;
  }
 
@@ -180,31 +217,29 @@ function draw(){
  if(scene==="settings"){
   ctx.fillStyle="white";
   ctx.font="20px sans-serif";
-  ctx.fillText("設定",200,40);
+  ctx.fillText(T.settings,200,40);
 
   ctx.font="16px sans-serif";
   ctx.fillText(`${T.lang} : ${language}`,140,80);
   ctx.fillText(`${T.control} : ${control}`,140,110);
 
-  ctx.fillText("キーボード操作",140,150);
-  ctx.fillText("← / A ：左移動",140,170);
-  ctx.fillText("→ / D ：右移動",140,190);
-  ctx.fillText("Enter ：ジャンプ",140,210);
+  ctx.fillText(T.kbTitle,140,150);
+  ctx.fillText(T.left,140,170);
+  ctx.fillText(T.right,140,190);
+  ctx.fillText(T.jump,140,210);
+  ctx.fillText("← "+T.back,140,235);
 
-  // タップ判定（文字範囲）
-  if(hitBox(140,60,200,30)) language=language==="jp"?"en":"jp";
-  if(hitBox(140,90,200,30)) control=control==="button"?"keyboard":"button";
-  if(hitBox(140,230,200,30)) scene="title";
-
-  ctx.fillText("← 戻る",140,230);
+  if(hitBox(140,60,220,30)) language=language==="jp"?"en":"jp";
+  if(hitBox(140,90,220,30)) control=control==="button"?"keyboard":"button";
+  if(hitBox(140,220,220,30)) scene="title";
   return;
  }
 
  // ポーズ
  if(scene==="pause"){
-  drawButton(140,80,200,40,"再開");
-  drawButton(140,130,200,40,"やり直し");
-  drawButton(140,180,200,40,"タイトルへ");
+  drawButton(140,80,200,40,T.resume);
+  drawButton(140,130,200,40,T.retry);
+  drawButton(140,180,200,40,T.totitle);
 
   if(hitBox(140,80,200,40)) scene="game";
   if(hitBox(140,130,200,40)){ reset(); scene="game"; }

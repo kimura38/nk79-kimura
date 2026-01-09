@@ -11,31 +11,46 @@ html,body{
  height:100%;
  background:#111;
  overflow:hidden;
+ font-family:sans-serif;
 }
 canvas{
  display:block;
- margin:auto;
  background:#222;
  touch-action:none;
+}
+#starBtn{
+ position:absolute;
+ top:10px;
+ right:10px;
+ width:50px; height:50px;
+ background:gold;
+ border-radius:50%;
+ font-size:24px;
+ border:none;
+ cursor:pointer;
+ z-index:10;
 }
 </style>
 </head>
 <body>
 
+<button id="starBtn">⭐︎</button>
 <canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const starBtn = document.getElementById("starBtn");
 
 // ===== 基本設定 =====
 const GRID = 8;
 let W,H,SIZE,OFFSET_Y,SLOT_Y;
-const SLOT_SCALE = 0.6;
+const SLOT_SCALE = 0.7;
 
 let board, pieces, dragging=null;
 let score = 0;
 let combo = 0;
+let bugMode = false;
 
 // ===== ブロック形 =====
 const SHAPES = [
@@ -48,7 +63,7 @@ const SHAPES = [
  [[1,1,1],[0,1,0]]
 ];
 
-// ===== 画面サイズ（縦画面最優先）=====
+// ===== 画面サイズ =====
 function resize(){
  W = Math.min(innerWidth, 480);
  H = innerHeight;
@@ -57,7 +72,7 @@ function resize(){
 
  SIZE = Math.floor(W / (GRID + 1));
  OFFSET_Y = SIZE * 1.5;
- SLOT_Y = OFFSET_Y + GRID * SIZE + SIZE;
+ SLOT_Y = OFFSET_Y + GRID * SIZE + SIZE*0.6;
 }
 window.addEventListener("resize", resize);
 resize();
@@ -157,12 +172,39 @@ function ghostPos(p){
 function draw(){
  ctx.clearRect(0,0,W,H);
 
- // タイトル
+ // バグモード時は全部ランダム
+ if(bugMode){
+  for(let y=0;y<GRID;y++){
+   for(let x=0;x<GRID;x++){
+    if(board[y][x]){
+     drawCell(x*SIZE + Math.random()*20-10,
+              OFFSET_Y+y*SIZE + Math.random()*20-10,
+              SIZE,
+              '#'+Math.floor(Math.random()*16777215).toString(16));
+    }
+   }
+  }
+  pieces.forEach(p=>{
+   p.shape.forEach((r,y)=>r.forEach((v,x)=>{
+    if(v){
+     drawCell(p.x + x*SIZE + Math.random()*20-10,
+              p.y + y*SIZE + Math.random()*20-10,
+              SIZE, '#'+Math.floor(Math.random()*16777215).toString(16));
+    }
+   }));
+  });
+  ctx.fillStyle='white';
+  ctx.font='30px sans-serif';
+  ctx.fillText("バグモード発動中！",10,50);
+  return;
+}
+
+// タイトル
  ctx.fillStyle="white";
  ctx.font=`bold ${SIZE*0.7}px sans-serif`;
  ctx.fillText("ブロック崩し", 10, SIZE);
 
- // 点線グリッド
+// 点線グリッド
  ctx.setLineDash([5,5]);
  ctx.strokeStyle="#444";
  for(let i=0;i<=GRID;i++){
@@ -178,16 +220,14 @@ function draw(){
  }
  ctx.setLineDash([]);
 
- // 固定ブロック
+// 固定ブロック
  for(let y=0;y<GRID;y++){
   for(let x=0;x<GRID;x++){
-   if(board[y][x]){
-    drawCell(x*SIZE, OFFSET_Y+y*SIZE, SIZE, "#4caf50");
-   }
+   if(board[y][x]) drawCell(x*SIZE, OFFSET_Y+y*SIZE, SIZE, "#4caf50");
   }
  }
 
- // ゴースト
+// ゴースト
  if(dragging){
   const g = ghostPos(dragging.p);
   if(canPlace(g.x,g.y,dragging.p.shape)){
@@ -199,7 +239,7 @@ function draw(){
   }
  }
 
- // 手持ちブロック
+// 手持ちブロック
  pieces.forEach(p=>{
   const s = (p.y>=SLOT_Y)? SIZE*SLOT_SCALE : SIZE;
   p.shape.forEach((r,y)=>r.forEach((v,x)=>{
@@ -207,11 +247,12 @@ function draw(){
   }));
  });
 
- // スコア
+// スコア
  ctx.fillStyle="white";
  ctx.font=`${SIZE*0.5}px sans-serif`;
  ctx.fillText("SCORE: "+score, 10, OFFSET_Y+GRID*SIZE+SIZE*0.7);
 
+// コンボ
  if(combo>1){
   ctx.fillText("COMBO x"+combo, 10, OFFSET_Y+GRID*SIZE+SIZE*1.3);
  }
@@ -252,6 +293,15 @@ canvas.addEventListener("pointerup",()=>{
  }
 
  dragging=null;
+});
+
+// ===== ⭐︎ボタン =====
+starBtn.addEventListener("click",()=>{
+ const code = prompt("ボーナスコードを入力");
+ if(code === "11451419194545810"){
+  bugMode = true;
+  alert("バグモード発動！");
+ }
 });
 
 // ===== ループ =====

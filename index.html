@@ -2,359 +2,190 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>2D Action Game</title>
+<title>Tetris</title>
 <style>
-body{margin:0;background:black;}
+body{
+ margin:0;
+ background:black;
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ height:100vh;
+}
 canvas{
- display:block;
- margin:auto;
- background:#5c94fc;
- touch-action:none;
+ background:#111;
 }
 </style>
 </head>
 <body>
 
-<canvas id="game" width="480" height="270"></canvas>
+<canvas id="game" width="300" height="600"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-//================ 状態 =================
-let scene="title"; // title settings game pause goal
-let language="jp";
-let control="button";
-let pointers=[];
-let pointerDown=false;
-let pointerJustDown=false;
-let keys={};
-let coinCount=0;
+const COLS = 10;
+const ROWS = 20;
+const SIZE = 30;
 
-//================ 言語 =================
-const TEXT={
- jp:{
-  title:"2Dアクションゲーム",
-  play:"プレイ",
-  settings:"設定",
-  back:"戻る",
-  lang:"言語",
-  control:"操作方法",
-  resume:"再開",
-  retry:"やり直し",
-  totitle:"タイトルへ",
-  goal:"ゴール！",
-  coins:"コイン"
- },
- en:{
-  title:"2D Action Game",
-  play:"Play",
-  settings:"Settings",
-  back:"Back",
-  lang:"Language",
-  control:"Controls",
-  resume:"Resume",
-  retry:"Retry",
-  totitle:"Back to Title",
-  goal:"GOAL!",
-  coins:"Coins"
- }
-};
+let board = Array.from({length:ROWS},()=>Array(COLS).fill(0));
 
-function langLabel(){
- return language==="jp"?"日本語":"English";
-}
-function controlLabel(){
- if(control==="button"){
-  return language==="jp"?"ボタン":"Buttons";
- }
- return language==="jp"?"キーボード":"Keyboard";
-}
-
-//================ プレイヤー =================
-const player={
- x:50,y:0,w:22,h:22,
- vx:0,vy:0,onGround:false
-};
-let cameraX=0;
-
-//================ ステージ =================
-const blocks=[
- // 地面
- {x:0,y:240,w:1800,h:30,type:"ground"},
- // 足場
- {x:200,y:190,w:80,h:12,type:"platform"},
- {x:400,y:160,w:80,h:12,type:"platform"},
- {x:650,y:130,w:80,h:12,type:"platform"},
- // ダメージ
- {x:520,y:230,w:60,h:10,type:"danger"}
+const COLORS = [
+ null,
+ "#00f0f0", // I
+ "#0000f0", // J
+ "#f0a000", // L
+ "#f0f000", // O
+ "#00f000", // S
+ "#a000f0", // T
+ "#f00000"  // Z
 ];
 
-const coins=[
- {x:220,y:160,collected:false},
- {x:420,y:130,collected:false},
- {x:670,y:100,collected:false}
+const SHAPES = [
+ [],
+ [[1,1,1,1]],
+ [[2,0,0],[2,2,2]],
+ [[0,0,3],[3,3,3]],
+ [[4,4],[4,4]],
+ [[0,5,5],[5,5,0]],
+ [[0,6,0],[6,6,6]],
+ [[7,7,0],[0,7,7]]
 ];
 
-const goalObj={
- x:1600,y:140,w:12,h:100
-};
+let piece, pos;
+let dropCounter = 0;
+let dropInterval = 500;
+let lastTime = 0;
+let gameOver = false;
 
-const GRAVITY=0.6,SPEED=3,JUMP=-10;
-
-//================ 入力 =================
-function setPointer(e){
- const r=canvas.getBoundingClientRect();
- pointers=[{x:e.clientX-r.left,y:e.clientY-r.top}];
-}
-canvas.addEventListener("mousedown",e=>{
- setPointer(e);
- pointerDown=true;
- pointerJustDown=true;
-});
-canvas.addEventListener("mousemove",e=>{
- if(pointerDown) setPointer(e);
-});
-window.addEventListener("mouseup",()=>{
- pointerDown=false;
- pointers=[];
-});
-
-canvas.addEventListener("touchstart",e=>{
- const r=canvas.getBoundingClientRect();
- pointers=[...e.touches].map(t=>({
-  x:t.clientX-r.left,
-  y:t.clientY-r.top
- }));
- pointerDown=true;
- pointerJustDown=true;
-});
-canvas.addEventListener("touchmove",e=>{
- const r=canvas.getBoundingClientRect();
- pointers=[...e.touches].map(t=>({
-  x:t.clientX-r.left,
-  y:t.clientY-r.top
- }));
-});
-canvas.addEventListener("touchend",()=>{
- pointerDown=false;
- pointers=[];
-});
-
-window.addEventListener("keydown",e=>keys[e.key]=true);
-window.addEventListener("keyup",e=>keys[e.key]=false);
-
-//================ 判定 =================
-function hit(a,b){
- return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-}
-function hitBox(x,y,w,h){
- return pointers.some(p=>p.x>=x&&p.x<=x+w&&p.y>=y&&p.y<=y+h);
-}
-function justPressed(x,y,w,h){
- return pointerJustDown && hitBox(x,y,w,h);
-}
-
-//================ リセット =================
-function reset(){
- player.x=50;player.y=0;
- player.vx=0;player.vy=0;
- coinCount=0;
- coins.forEach(c=>c.collected=false);
- cameraX=0;
-}
-
-//================ 更新 =================
-function update(){
-
- // UI操作
- if(scene==="title"){
-  if(justPressed(140,160,200,40)){ reset(); scene="game"; }
-  if(justPressed(430,10,40,25)) scene="settings";
+function newPiece(){
+ const type = Math.floor(Math.random()*7)+1;
+ piece = SHAPES[type].map(r=>r.slice());
+ pos = {x:3,y:0};
+ if(collide()){
+  gameOver = true;
  }
- if(scene==="settings"){
-  if(justPressed(140,80,220,30)) language=language==="jp"?"en":"jp";
-  if(justPressed(140,110,220,30)) control=control==="button"?"keyboard":"button";
-  if(justPressed(140,235,220,30)) scene="title";
- }
- if(scene==="pause"){
-  if(justPressed(140,80,200,40)) scene="game";
-  if(justPressed(140,130,200,40)){ reset(); scene="game"; }
-  if(justPressed(140,180,200,40)) scene="title";
- }
- if(scene==="goal"){
-  if(justPressed(140,170,200,40)) scene="title";
- }
+}
 
- // ===== ゲーム処理 =====
- if(scene==="game"){
+function rotate(matrix){
+ return matrix[0].map((_,i)=>matrix.map(r=>r[i]).reverse());
+}
 
-  if(justPressed(430,10,40,25)) scene="pause";
-
-  // 横移動（ジャンプと独立）
-  let move=0;
-  if(control==="button"){
-   if(hitBox(20,210,40,40)) move=-1;
-   if(hitBox(70,210,40,40)) move=1;
-  }
-  if(control==="keyboard"){
-   if(keys["ArrowLeft"]||keys["a"]) move=-1;
-   if(keys["ArrowRight"]||keys["d"]) move=1;
-  }
-  player.vx=move*SPEED;
-
-  // ジャンプ（移動中OK）
-  let jump=false;
-  if(control==="button"){
-   if(hitBox(400,210,50,40)) jump=true;
-  }
-  if(control==="keyboard"){
-   if(keys["Enter"]) jump=true;
-  }
-  if(jump && player.onGround){
-   player.vy=JUMP;
-  }
-
-  // 物理
-  player.vy+=GRAVITY;
-  player.x+=player.vx;
-  player.y+=player.vy;
-  player.onGround=false;
-
-  blocks.forEach(b=>{
-   if(hit(player,b)){
-    if(b.type==="danger"){
-     reset();
-    }else if(player.vy>0){
-     player.y=b.y-player.h;
-     player.vy=0;
-     player.onGround=true;
+function collide(){
+ for(let y=0;y<piece.length;y++){
+  for(let x=0;x<piece[y].length;x++){
+   if(piece[y][x]){
+    let bx = x + pos.x;
+    let by = y + pos.y;
+    if(bx<0 || bx>=COLS || by>=ROWS || board[by]?.[bx]){
+     return true;
     }
    }
-  });
-
-  // コイン取得
-  coins.forEach(c=>{
-   if(!c.collected && hit(player,{x:c.x,y:c.y,w:12,h:12})){
-    c.collected=true;
-    coinCount++;
-   }
-  });
-
-  // ゴール
-  if(hit(player,goalObj)){
-   scene="goal";
   }
-
-  cameraX=Math.max(0,player.x-200);
  }
-
- pointerJustDown=false;
+ return false;
 }
 
-//================ 描画 =================
-function drawButton(x,y,w,h,text){
- ctx.fillStyle="#777";
- ctx.fillRect(x,y,w,h);
- ctx.strokeStyle="white";
- ctx.strokeRect(x,y,w,h);
- ctx.fillStyle="white";
- ctx.font="18px sans-serif";
- ctx.fillText(text,x+w/2-ctx.measureText(text).width/2,y+h/2+6);
+function merge(){
+ piece.forEach((row,y)=>{
+  row.forEach((v,x)=>{
+   if(v) board[y+pos.y][x+pos.x]=v;
+  });
+ });
+}
+
+function clearLines(){
+ outer:for(let y=ROWS-1;y>=0;y--){
+  for(let x=0;x<COLS;x++){
+   if(!board[y][x]) continue outer;
+  }
+  board.splice(y,1);
+  board.unshift(Array(COLS).fill(0));
+  y++;
+ }
+}
+
+function drawBlock(x,y,color){
+ ctx.fillStyle=color;
+ ctx.fillRect(x*SIZE,y*SIZE,SIZE,SIZE);
+ ctx.strokeStyle="#000";
+ ctx.strokeRect(x*SIZE,y*SIZE,SIZE,SIZE);
 }
 
 function draw(){
- ctx.clearRect(0,0,480,270);
- const T=TEXT[language];
+ ctx.clearRect(0,0,300,600);
 
- if(scene==="title"){
-  ctx.fillStyle="#5c94fc";
-  ctx.fillRect(0,0,480,200);
-  ctx.fillStyle="#228b22";
-  ctx.fillRect(0,200,480,70);
-  ctx.fillStyle="white";
-  ctx.font="26px sans-serif";
-  ctx.fillText(T.title,80,100);
-  drawButton(140,160,200,40,T.play);
-  drawButton(430,10,40,25,"⚙");
-  return;
- }
+ board.forEach((row,y)=>{
+  row.forEach((v,x)=>{
+   if(v) drawBlock(x,y,COLORS[v]);
+  });
+ });
 
- if(scene==="settings"){
-  ctx.fillStyle="white";
-  ctx.font="20px sans-serif";
-  ctx.fillText(T.settings,200,40);
-  ctx.font="16px sans-serif";
-  ctx.fillText(`${T.lang} : ${langLabel()}`,140,80);
-  ctx.fillText(`${T.control} : ${controlLabel()}`,140,110);
-  ctx.fillText("← "+T.back,140,235);
-  return;
- }
+ piece.forEach((row,y)=>{
+  row.forEach((v,x)=>{
+   if(v) drawBlock(x+pos.x,y+pos.y,COLORS[v]);
+  });
+ });
 
- if(scene==="pause"){
-  drawButton(140,80,200,40,T.resume);
-  drawButton(140,130,200,40,T.retry);
-  drawButton(140,180,200,40,T.totitle);
-  return;
- }
-
- if(scene==="goal"){
-  ctx.fillStyle="black";
-  ctx.fillRect(0,0,480,270);
+ if(gameOver){
+  ctx.fillStyle="rgba(0,0,0,0.7)";
+  ctx.fillRect(0,0,300,600);
   ctx.fillStyle="white";
   ctx.font="30px sans-serif";
-  ctx.fillText(T.goal,170,120);
-  drawButton(140,170,200,40,T.totitle);
-  return;
+  ctx.fillText("GAME OVER",35,300);
  }
+}
 
- // ===== ゲーム描画 =====
- ctx.save();
- ctx.translate(-cameraX,0);
+function update(time=0){
+ const delta = time - lastTime;
+ lastTime = time;
+ dropCounter += delta;
 
- blocks.forEach(b=>{
-  if(b.type==="ground") ctx.fillStyle="#654321";
-  if(b.type==="platform") ctx.fillStyle="#228b22";
-  if(b.type==="danger") ctx.fillStyle="red";
-  ctx.fillRect(b.x,b.y,b.w,b.h);
- });
-
- ctx.fillStyle="gold";
- coins.forEach(c=>{
-  if(!c.collected){
-   ctx.beginPath();
-   ctx.arc(c.x+6,c.y+6,6,0,Math.PI*2);
-   ctx.fill();
+ if(dropCounter > dropInterval){
+  pos.y++;
+  if(collide()){
+   pos.y--;
+   merge();
+   clearLines();
+   newPiece();
   }
- });
-
- ctx.fillStyle="white";
- ctx.fillRect(goalObj.x,goalObj.y,goalObj.w,goalObj.h);
-
- ctx.fillStyle="blue";
- ctx.fillRect(player.x,player.y,player.w,player.h);
-
- ctx.restore();
-
- ctx.fillStyle="white";
- ctx.fillText(`${T.coins}: ${coinCount}`,10,20);
-
- drawButton(430,10,40,25,"Ⅱ");
-
- if(control==="button"){
-  drawButton(20,210,40,40,"◀");
-  drawButton(70,210,40,40,"▶");
-  drawButton(400,210,50,40,"⬆");
+  dropCounter = 0;
  }
+
+ draw();
+ if(!gameOver) requestAnimationFrame(update);
 }
 
-//================ ループ =================
-function loop(){
- update();
- draw();
- requestAnimationFrame(loop);
-}
-loop();
+document.addEventListener("keydown",e=>{
+ if(gameOver) return;
+
+ if(e.key==="ArrowLeft"){
+  pos.x--;
+  if(collide()) pos.x++;
+ }
+ if(e.key==="ArrowRight"){
+  pos.x++;
+  if(collide()) pos.x--;
+ }
+ if(e.key==="ArrowDown"){
+  pos.y++;
+  if(collide()) pos.y--;
+ }
+ if(e.key==="ArrowUp"){
+  const rotated = rotate(piece);
+  const old = piece;
+  piece = rotated;
+  if(collide()) piece = old;
+ }
+ if(e.code==="Space"){
+  while(!collide()) pos.y++;
+  pos.y--;
+ }
+});
+
+newPiece();
+update();
 </script>
 
 </body>

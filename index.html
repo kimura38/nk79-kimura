@@ -22,79 +22,61 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
 //================ 状態 =================
-let scene="title"; // title settings game pause goal
+let scene="title"; // title map settings game pause
 let language="jp";
 let control="button";
+let currentStage=0;
+let unlockedStage=1;
+
 let pointers=[];
 let pointerDown=false;
 let pointerJustDown=false;
 let keys={};
 
-//================ 言語 =================
+//================ テキスト =================
 const TEXT={
  jp:{
   title:"2Dアクションゲーム",
   play:"プレイ",
-  settings:"設定",
+  map:"ステージ選択",
+  stage:"ステージ",
   back:"戻る",
-  lang:"言語",
-  control:"操作方法",
   resume:"再開",
   retry:"やり直し",
-  totitle:"タイトルへ",
-  goal:"ゴール！",
-  kbTitle:"キーボード操作",
-  left:"← / A ：左移動",
-  right:"→ / D ：右移動",
-  jump:"Enter ：ジャンプ"
+  tomap:"マップへ"
  },
  en:{
   title:"2D Action Game",
   play:"Play",
-  settings:"Settings",
+  map:"Stage Select",
+  stage:"Stage",
   back:"Back",
-  lang:"Language",
-  control:"Controls",
   resume:"Resume",
   retry:"Retry",
-  totitle:"Back to Title",
-  goal:"GOAL!",
-  kbTitle:"Keyboard Controls",
-  left:"← / A : Move Left",
-  right:"→ / D : Move Right",
-  jump:"Enter : Jump"
+  tomap:"To Map"
  }
 };
-
-function langLabel(){
- return language==="jp"?"日本語":"English";
-}
-function controlLabel(){
- if(control==="button"){
-  return language==="jp"?"ボタン":"Buttons";
- }
- return language==="jp"?"キーボード":"Keyboard";
-}
 
 //================ プレイヤー =================
 const player={x:50,y:0,w:24,h:24,vx:0,vy:0,onGround:false};
 let cameraX=0;
 
-//================ ステージ =================
+//================ ステージデータ =================
+const STAGES=[
+ {goalX:800},
+ {goalX:1000},
+ {goalX:1200}
+];
+
 const platforms=[
  {x:0,y:240,w:1600,h:30},
  {x:200,y:190,w:80,h:10},
  {x:400,y:160,w:80,h:10}
 ];
 
-const goalObj={
- pole:{x:1400,y:140,w:6,h:100},
- flag:{x:1406,y:140,w:20,h:15}
-};
-
 const GRAVITY=0.6,SPEED=3,JUMP=-10;
 
-//================ 入力（共通） =================
+//================ 入力 =================
 function setPointer(e){
  const r=canvas.getBoundingClientRect();
  pointers=[{x:e.clientX-r.left,y:e.clientY-r.top}];
@@ -104,14 +86,10 @@ canvas.addEventListener("mousedown",e=>{
  pointerDown=true;
  pointerJustDown=true;
 });
-canvas.addEventListener("mousemove",e=>{
- if(pointerDown) setPointer(e);
-});
 window.addEventListener("mouseup",()=>{
  pointerDown=false;
  pointers=[];
 });
-
 canvas.addEventListener("touchstart",e=>{
  const r=canvas.getBoundingClientRect();
  pointers=[...e.touches].map(t=>({
@@ -120,13 +98,6 @@ canvas.addEventListener("touchstart",e=>{
  }));
  pointerDown=true;
  pointerJustDown=true;
-});
-canvas.addEventListener("touchmove",e=>{
- const r=canvas.getBoundingClientRect();
- pointers=[...e.touches].map(t=>({
-  x:t.clientX-r.left,
-  y:t.clientY-r.top
- }));
 });
 canvas.addEventListener("touchend",()=>{
  pointerDown=false;
@@ -137,9 +108,6 @@ window.addEventListener("keydown",e=>keys[e.key]=true);
 window.addEventListener("keyup",e=>keys[e.key]=false);
 
 //================ 判定 =================
-function hit(a,b){
- return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-}
 function hitBox(x,y,w,h){
  return pointers.some(p=>p.x>=x&&p.x<=x+w&&p.y>=y&&p.y<=y+h);
 }
@@ -149,41 +117,37 @@ function justPressed(x,y,w,h){
 
 //================ リセット =================
 function reset(){
- player.x=50;player.y=0;
- player.vx=0;player.vy=0;
+ player.x=50;
+ player.y=0;
+ player.vx=0;
+ player.vy=0;
  cameraX=0;
 }
 
 //================ 更新 =================
 function update(){
- const T=TEXT[language];
-
- // ---- UI操作（押した瞬間だけ） ----
+ // -------- タイトル --------
  if(scene==="title"){
-  if(justPressed(140,160,200,40)){ reset(); scene="game"; }
-  if(justPressed(430,10,40,25)) scene="settings";
+  if(justPressed(140,160,200,40)) scene="map";
  }
 
- if(scene==="settings"){
-  if(justPressed(140,60,220,30)) language=language==="jp"?"en":"jp";
-  if(justPressed(140,90,220,30)) control=control==="button"?"keyboard":"button";
-  if(justPressed(140,220,220,30)) scene="title";
+ // -------- マップ --------
+ if(scene==="map"){
+  for(let i=0;i<STAGES.length;i++){
+   if(i<unlockedStage){
+    if(justPressed(140,80+i*40,200,30)){
+     currentStage=i;
+     reset();
+     scene="game";
+    }
+   }
+  }
+  if(justPressed(20,230,80,30)) scene="title";
  }
 
- if(scene==="pause"){
-  if(justPressed(140,80,200,40)) scene="game";
-  if(justPressed(140,130,200,40)){ reset(); scene="game"; }
-  if(justPressed(140,180,200,40)) scene="title";
- }
-
- if(scene==="goal"){
-  if(justPressed(140,170,200,40)) scene="title";
- }
-
- // ---- ゲーム更新 ----
+ // -------- ゲーム --------
  if(scene==="game"){
-  if(justPressed(430,10,40,25)) scene="pause";
-
+  // 移動（ジャンプと分離）
   if(control==="button"){
    if(hitBox(20,210,40,40)) player.vx=-SPEED;
    else if(hitBox(70,210,40,40)) player.vx=SPEED;
@@ -204,21 +168,25 @@ function update(){
    }
   }
 
+  // 物理
   player.vy+=GRAVITY;
   player.x+=player.vx;
   player.y+=player.vy;
   player.onGround=false;
 
   platforms.forEach(p=>{
-   if(hit(player,p)&&player.vy>0){
+   if(player.x<p.x+p.w&&player.x+player.w>p.x&&
+      player.y<p.y+p.h&&player.y+player.h>p.y&&player.vy>0){
     player.y=p.y-player.h;
     player.vy=0;
     player.onGround=true;
    }
   });
 
-  if(hit(player,goalObj.pole)||hit(player,goalObj.flag)){
-   scene="goal";
+  // ゴール判定
+  if(player.x > STAGES[currentStage].goalX){
+   unlockedStage=Math.max(unlockedStage,currentStage+2);
+   scene="map";
   }
 
   cameraX=Math.max(0,player.x-200);
@@ -228,13 +196,13 @@ function update(){
 }
 
 //================ 描画 =================
-function drawButton(x,y,w,h,text){
- ctx.fillStyle="#777";
+function drawButton(x,y,w,h,text,enabled=true){
+ ctx.fillStyle=enabled?"#777":"#444";
  ctx.fillRect(x,y,w,h);
  ctx.strokeStyle="white";
  ctx.strokeRect(x,y,w,h);
  ctx.fillStyle="white";
- ctx.font="18px sans-serif";
+ ctx.font="16px sans-serif";
  ctx.fillText(text,x+w/2-ctx.measureText(text).width/2,y+h/2+6);
 }
 
@@ -244,73 +212,50 @@ function draw(){
 
  if(scene==="title"){
   ctx.fillStyle="#5c94fc";
-  ctx.fillRect(0,0,480,200);
-  ctx.fillStyle="#228b22";
-  ctx.fillRect(0,200,480,70);
+  ctx.fillRect(0,0,480,270);
   ctx.fillStyle="white";
   ctx.font="26px sans-serif";
   ctx.fillText(T.title,80,100);
   drawButton(140,160,200,40,T.play);
-  drawButton(430,10,40,25,"⚙");
   return;
  }
 
- if(scene==="settings"){
-  ctx.fillStyle="white";
-  ctx.font="20px sans-serif";
-  ctx.fillText(T.settings,200,40);
-  ctx.font="16px sans-serif";
-  ctx.fillText(`${T.lang} : ${langLabel()}`,140,80);
-  ctx.fillText(`${T.control} : ${controlLabel()}`,140,110);
-
-  if(control==="keyboard"){
-   ctx.fillText(T.kbTitle,140,150);
-   ctx.fillText(T.left,140,170);
-   ctx.fillText(T.right,140,190);
-   ctx.fillText(T.jump,140,210);
-  }
-
-  ctx.fillText("← "+T.back,140,235);
-  return;
- }
-
- if(scene==="pause"){
-  drawButton(140,80,200,40,T.resume);
-  drawButton(140,130,200,40,T.retry);
-  drawButton(140,180,200,40,T.totitle);
-  return;
- }
-
- if(scene==="goal"){
+ if(scene==="map"){
   ctx.fillStyle="black";
   ctx.fillRect(0,0,480,270);
   ctx.fillStyle="white";
-  ctx.font="30px sans-serif";
-  ctx.fillText(T.goal,170,120);
-  drawButton(140,170,200,40,T.totitle);
+  ctx.font="22px sans-serif";
+  ctx.fillText(T.map,150,40);
+
+  ctx.font="16px sans-serif";
+  for(let i=0;i<STAGES.length;i++){
+   const unlocked=i<unlockedStage;
+   drawButton(
+    140,80+i*40,200,30,
+    `${T.stage} ${i+1}`,
+    unlocked
+   );
+  }
+  drawButton(20,230,80,30,T.back);
   return;
  }
 
- // ---- ゲーム描画 ----
+ // -------- ゲーム描画 --------
  ctx.save();
  ctx.translate(-cameraX,0);
 
  ctx.fillStyle="#654321";
  platforms.forEach(p=>ctx.fillRect(p.x,p.y,p.w,p.h));
 
- ctx.fillStyle="white";
- ctx.fillRect(goalObj.pole.x,goalObj.pole.y,goalObj.pole.w,goalObj.pole.h);
- ctx.fillStyle="red";
- ctx.fillRect(goalObj.flag.x,goalObj.flag.y,goalObj.flag.w,goalObj.flag.h);
+ ctx.fillStyle="yellow";
+ ctx.fillRect(STAGES[currentStage].goalX,200,20,40);
 
  ctx.fillStyle="red";
  ctx.fillRect(player.x,player.y,player.w,player.h);
 
  ctx.restore();
 
- drawButton(430,10,40,25,"Ⅱ");
-
- // 👇 キーボード操作時は表示しない
+ // 操作ボタン（キーボード時は非表示）
  if(control==="button"){
   drawButton(20,210,40,40,"◀");
   drawButton(70,210,40,40,"▶");

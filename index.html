@@ -3,182 +3,106 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Group Chat</title>
-
-<!-- Firebase CDN -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<title>Simple Chat</title>
 
 <style>
 body {
   margin: 0;
-  font-family: system-ui;
-  background: #0f0f0f;
-  color: white;
+  font-family: system-ui, sans-serif;
+  background: #f2f2f2;
 }
-header {
-  padding: 12px;
-  font-size: 20px;
-  border-bottom: 1px solid #333;
+.screen {
+  display: none;
+  height: 100vh;
+}
+.screen.active {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+}
+.center {
+  justify-content: center;
+  align-items: center;
+}
+input, button {
+  font-size: 16px;
+  padding: 10px;
+  margin: 5px;
 }
 button {
-  background: #1db954;
-  border: none;
+  background: #06c755;
   color: white;
-  padding: 8px 12px;
+  border: none;
   border-radius: 6px;
 }
-#screen > div { display: none; }
-.list { padding: 10px; }
-.item {
-  padding: 12px;
-  border-bottom: 1px solid #333;
-}
-input {
-  width: 100%;
-  padding: 10px;
-  margin: 6px 0;
-}
-.msg {
-  margin: 6px;
-}
-.me { text-align: right; }
 </style>
 </head>
 
 <body>
 
-<div id="screen">
-
-<!-- 初期設定 -->
-<div id="setup">
-  <h2>初期設定</h2>
+<!-- 初期設定画面 -->
+<div id="setup" class="screen center">
+  <h2>名前を入力</h2>
   <input id="nameInput" placeholder="名前">
-  <button onclick="saveName()">開始</button>
+  <button onclick="saveName()">はじめる</button>
 </div>
 
-<!-- トーク一覧 -->
-<div id="list">
-  <header>
-    トーク
-    <button onclick="openPlus()">＋</button>
-  </header>
-  <div id="groups" class="list"></div>
+<!-- トーク一覧（仮） -->
+<div id="home" class="screen">
+  <h2 style="padding:10px">トーク一覧（準備中）</h2>
 </div>
 
-<!-- ＋画面 -->
-<div id="plus">
-  <h3>グループ</h3>
-  <button onclick="createGroup()">新規作成</button>
-  <input id="codeInput" placeholder="コード入力">
-  <button onclick="joinGroup()">参加</button>
-  <button onclick="back()">戻る</button>
-</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-<!-- チャット -->
-<div id="chat">
-  <header id="chatTitle"></header>
-  <div id="messages"></div>
-  <input id="msgInput" placeholder="メッセージ">
-  <button onclick="send()">送信</button>
-</div>
-
-</div>
-
-<script>
-// Firebase
-firebase.initializeApp({
+/* 🔑 Firebase設定（そのまま使ってOK） */
+const firebaseConfig = {
   apiKey: "AIzaSyCQNNj6Ff39wECAI6i8n1f2NXstF2k7duo",
   authDomain: "chat-99077.firebaseapp.com",
   databaseURL: "https://chat-99077-default-rtdb.firebaseio.com",
-  projectId: "chat-99077"
-});
-const db = firebase.database();
+  projectId: "chat-99077",
+  storageBucket: "chat-99077.firebasestorage.app",
+  messagingSenderId: "991554319310",
+  appId: "1:991554319310:web:a662919d90bc014e06319f"
+};
 
-// 状態
-let user = localStorage.getItem("name");
-let groups = JSON.parse(localStorage.getItem("groups") || "[]");
-let currentGroup = "";
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-// 画面制御
-const screens = ["setup","list","plus","chat"];
-function show(id){
-  screens.forEach(s=>document.getElementById(s).style.display="none");
-  document.getElementById(id).style.display="block";
+/* ユーザーID生成 */
+function uuid() {
+  return 'xxxxxx'.replace(/x/g, () =>
+    Math.floor(Math.random() * 36).toString(36)
+  );
 }
 
-// 初期判定
-if(!user) show("setup"); else showList();
-
-// 初期設定
-function saveName(){
-  user = nameInput.value;
-  localStorage.setItem("name", user);
-  showList();
+/* 初期表示 */
+const userId = localStorage.getItem("userId");
+if (userId) {
+  show("home");
+} else {
+  show("setup");
 }
 
-// トーク一覧
-function showList(){
-  show("list");
-  const box = document.getElementById("groups");
-  box.innerHTML = "";
-  if(groups.length === 0){
-    box.innerHTML = "まだトークがありません";
-  }
-  groups.forEach(g=>{
-    const d = document.createElement("div");
-    d.className="item";
-    d.textContent = g;
-    d.onclick = ()=>openChat(g);
-    box.appendChild(d);
+window.saveName = () => {
+  const name = nameInput.value.trim();
+  if (!name) return alert("名前を入力して");
+
+  const id = uuid();
+  localStorage.setItem("userId", id);
+  localStorage.setItem("name", name);
+
+  set(ref(db, "users/" + id), {
+    name: name,
+    created: Date.now()
   });
-}
 
-// ＋
-function openPlus(){ show("plus"); }
-function back(){ showList(); }
+  show("home");
+};
 
-// グループ作成
-function createGroup(){
-  const code = Math.random().toString(36).substr(2,6).toUpperCase();
-  db.ref("groups/"+code).set({created: Date.now()});
-  groups.push(code);
-  localStorage.setItem("groups", JSON.stringify(groups));
-  showList();
-}
-
-// 参加
-function joinGroup(){
-  const code = codeInput.value;
-  groups.push(code);
-  localStorage.setItem("groups", JSON.stringify(groups));
-  showList();
-}
-
-// チャット
-function openChat(code){
-  currentGroup = code;
-  show("chat");
-  chatTitle.textContent = code;
-  db.ref("groups/"+code+"/messages").off();
-  db.ref("groups/"+code+"/messages").on("child_added", s=>{
-    const m = s.val();
-    const d = document.createElement("div");
-    d.className = "msg"+(m.user===user?" me":"");
-    d.textContent = m.user+": "+m.text;
-    messages.appendChild(d);
-  });
-}
-
-// 送信
-function send(){
-  db.ref("groups/"+currentGroup+"/messages").push({
-    user,
-    text: msgInput.value
-  });
-  msgInput.value="";
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
 }
 </script>
 

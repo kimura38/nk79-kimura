@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat</title>
+<title>Simple Chat</title>
 
 <style>
 html,body{
@@ -48,7 +48,7 @@ button{padding:8px 12px;font-size:14px;border:none;border-radius:6px}
   <header>
     <span onclick="openUser()">☰</span>
     トーク
-    <span onclick="createChat()">＋</span>
+    <span onclick="openFriendList()">＋</span>
   </header>
   <div id="chatList" class="list"></div>
 </div>
@@ -74,16 +74,17 @@ button{padding:8px 12px;font-size:14px;border:none;border-radius:6px}
   </header>
   <div style="padding:15px">
     <div id="userInfo"></div><br>
+
     <input id="newName" placeholder="名前変更">
     <button onclick="changeName()">変更</button><br><br>
 
     <b>フレンドコード</b>
     <div id="myCode"></div><br>
 
-    <input id="addCode" placeholder="コード入力">
+    <input id="addCode" placeholder="フレンドコード入力">
     <button onclick="addFriend()">フレンド追加</button><br><br>
 
-    <button class="gray" onclick="resetAll()">初期化（削除）</button>
+    <button class="gray" onclick="resetAll()">初期化（アカウント削除）</button>
   </div>
 </div>
 
@@ -122,13 +123,12 @@ window.saveUser=()=>{
   localStorage.setItem("uid",userId);
   localStorage.setItem("name",name);
   localStorage.setItem("code",code);
-  set(ref(db,"users/"+userId),{name,code,chats:{}});
+  set(ref(db,"users/"+userId),{name,code,friends:{},chats:{}});
   loadHome();
 };
 
 function loadHome(){
   show("home");
-  chatList.innerHTML="";
   onValue(ref(db,"users/"+userId+"/chats"),snap=>{
     chatList.innerHTML="";
     snap.forEach(c=>{
@@ -141,23 +141,48 @@ function loadHome(){
   });
 }
 
-window.createChat=async()=>{
-  const c=prompt("1:1対1 / 2:グループ");
-  if(!c) return;
-  if(c==="1"){
-    const f=prompt("相手のコード");
-    const us=await get(ref(db,"users"));
-    let target=null;
-    us.forEach(u=>{if(u.val().code===f) target=u.key});
-    if(!target) return alert("見つからない");
-    const id="chat_"+Date.now();
-    set(ref(db,"chats/"+id),{members:{[userId]:1,[target]:1},messages:{}});
-    set(ref(db,"users/"+userId+"/chats/"+id),1);
-    set(ref(db,"users/"+target+"/chats/"+id),1);
-  } else {
-    alert("グループは次対応");
+window.openFriendList=async()=>{
+  const snap = await get(ref(db,`users/${userId}/friends`));
+  if(!snap.exists()) return alert("フレンドがいません");
+
+  let text="誰と話す？\n";
+  const list=[];
+  let i=1;
+
+  for(const fid in snap.val()){
+    const u=await get(ref(db,"users/"+fid));
+    list.push({id:fid,name:u.val().name});
+    text+=`${i++}: ${u.val().name}\n`;
   }
+
+  const sel=Number(prompt(text))-1;
+  if(!list[sel]) return;
+  startChat(list[sel]);
 };
+
+async function startChat(friend){
+  const myChats=await get(ref(db,`users/${userId}/chats`));
+  let chatId=null;
+
+  if(myChats.exists()){
+    for(const cid in myChats.val()){
+      const mem=await get(ref(db,`chats/${cid}/members`));
+      if(mem.exists() && mem.val()[friend.id]) chatId=cid;
+    }
+  }
+
+  if(!chatId){
+    chatId="chat_"+Date.now();
+    set(ref(db,"chats/"+chatId),{
+      members:{[userId]:true,[friend.id]:true},
+      messages:{}
+    });
+    set(ref(db,`users/${userId}/chats/${chatId}`),true);
+    set(ref(db,`users/${friend.id}/chats/${chatId}`),true);
+  }
+
+  openChat(chatId);
+}
 
 function openChat(id){
   currentChat=id;
@@ -189,21 +214,40 @@ window.openUser=()=>{
   myCode.textContent=localStorage.getItem("code");
 };
 
+window.addFriend=async()=>{
+  const input=addCode.value.trim().toUpperCase();
+  if(!input) return;
+
+  const snap=await get(ref(db,"users"));
+  let target=null;
+
+  snap.forEach(u=>{
+    if(u.val().code===input) target=u.key;
+  });
+
+  if(!target||target===userId) return alert("無効");
+
+  set(ref(db,`users/${userId}/friends/${target}`),true);
+  set(ref(db,`users/${target}/friends/${userId}`),true);
+  alert("フレンド追加完了");
+  addCode.value="";
+};
+
 window.changeName=()=>{
   const n=newName.value.trim();
   if(!n) return;
-  set(ref(db,"users/"+userId+"/name"),n);
+  set(ref(db,`users/${userId}/name`),n);
   localStorage.setItem("name",n);
   alert("変更完了");
 };
 
-window.addFriend=()=>alert("1対1作成で自動登録");
 window.resetAll=()=>{
-  if(confirm("削除する？")){
+  if(confirm("アカウント削除しますか？")){
     localStorage.clear();
     location.reload();
   }
 };
+
 window.backHome=()=>loadHome();
 </script>
 

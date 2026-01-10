@@ -58,7 +58,7 @@ let particleTimer=0;
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
 // === ゲーム状態 ===
-let state="title"; // title,select,game
+let state="select"; // 初回は工場選択
 let selectedFactory=null;
 
 // === 工場定義 ===
@@ -100,7 +100,7 @@ upgradeBtn.addEventListener("click",()=>{
 okBtn.addEventListener("click",()=>{
  score-=10;
  autoRate+=0.5;
- floatingScore("+UP!");
+ spawnParticle();
  menu.style.display="none";
 });
 cancelBtn.addEventListener("click",()=>{ menu.style.display="none"; });
@@ -110,29 +110,19 @@ function drawFactorySelect(){
  ctx.clearRect(0,0,W,H);
  ctx.fillStyle="white";
  ctx.font="30px sans-serif";
- ctx.fillText("工場を選択", W/3, 50);
+ ctx.fillText("工場を選択", W/4, 50);
  factories.forEach((f,i)=>{
    ctx.fillStyle=i===selectedFactory?"yellow":"white";
-   ctx.fillText(f.name, W/3, 120+i*60);
+   ctx.fillText(f.name, W/4, 120+i*60);
    ctx.font="16px sans-serif";
-   ctx.fillText("利点: "+f.adv, W/3+150, 120+i*60);
-   ctx.fillText("欠点: "+f.dis, W/3+150, 140+i*60);
+   ctx.fillText("利点: "+f.adv, W/4+200, 120+i*60);
+   ctx.fillText("欠点: "+f.dis, W/4+200, 140+i*60);
    ctx.font="30px sans-serif";
  });
- ctx.fillText("クリックで選択", W/3, H-50);
+ ctx.fillText("クリックで選択", W/4, H-50);
 }
 
-// === タイトル画面描画 ===
-function drawTitle(){
- ctx.clearRect(0,0,W,H);
- ctx.fillStyle="white";
- ctx.font="50px sans-serif";
- ctx.fillText("放置工場ゲーム", W/6, H/3);
- ctx.font="24px sans-serif";
- ctx.fillText("タップ/クリックでスタート", W/6, H/2);
-}
-
-// === 金パーティクル ===
+// === 金パーティクル生成 ===
 function spawnParticle(){
  let x=W/2; let y=H/2-40;
  let dx=(Math.random()-0.5)*1;
@@ -141,32 +131,29 @@ function spawnParticle(){
  particles.push({x,y,dx,dy,size,alpha:1});
 }
 
-// === 浮遊スコア ===
-let floatingScores=[];
-function floatingScore(text){
- floatingScores.push({text,x:W/2,y:H/2,alpha:1});
-}
-
 // === 描画 ===
 function draw(){
  ctx.clearRect(0,0,W,H);
- if(state==="title"){ drawTitle(); return; }
+
  if(state==="select"){ drawFactorySelect(); return; }
+
+ // 背景本物感
+ ctx.fillStyle="#444";
+ ctx.fillRect(0,H/2+50,W,20); // 床
+ ctx.fillStyle="#222";
+ ctx.fillRect(0,H/2+70,W,30); // 装置ベース
 
  // 工場描画
  ctx.fillStyle='#888';
  ctx.fillRect(W/2-50,H/2-50,100,100);
- ctx.fillStyle='#555';
- ctx.fillRect(W/2-60,H/2+50,120,20);
-
- // 浮遊スコア
- floatingScores=floatingScores.filter(f=>{
-   ctx.fillStyle=`rgba(255,255,0,${f.alpha})`;
-   ctx.font='20px sans-serif';
-   ctx.fillText(f.text,f.x,f.y);
-   f.y-=1; f.alpha-=0.02;
-   return f.alpha>0;
- });
+ // 工場影
+ ctx.fillStyle='rgba(0,0,0,0.3)';
+ ctx.fillRect(W/2-50,H/2-40,100,10);
+ // 煙
+ ctx.fillStyle='rgba(200,200,200,0.3)';
+ ctx.beginPath();
+ ctx.ellipse(W/2,H/2-60,10,20,0,0,Math.PI*2);
+ ctx.fill();
 
  // 金パーティクル
  particles=particles.filter(p=>{
@@ -174,7 +161,7 @@ function draw(){
    ctx.beginPath();
    ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
    ctx.fill();
-   p.x+=p.dx; p.y+=p.dy; p.dy+=0.05;
+   p.x+=p.dx; p.y+=p.dy; p.dy+=0.05; // 重力
    p.alpha-=0.01;
    return p.alpha>0;
  });
@@ -189,7 +176,7 @@ function update(){
  lastTime=now;
  if(state==="game"){
    let increase=autoRate*delta;
-   for(let i=0;i<Math.floor(increase);i++) spawnParticle();
+   for(let i=0;i<Math.floor(increase);i++) spawnParticle(); // 1金ごとに1パーティクル
    score+=increase;
  }
 }
@@ -202,15 +189,14 @@ function loop(){
 }
 loop();
 
-// === タイトルクリックで工場選択へ ===
-canvas.addEventListener("pointerdown",()=>{
- if(state==="title"){ state="select"; return; }
+// === 工場選択クリックでゲーム開始 ===
+canvas.addEventListener("pointerdown",(event)=>{
  if(state==="select"){
    let y = event.clientY;
    factories.forEach((f,i)=>{
      if(y>120+i*60-20 && y<120+i*60+20){
        selectedFactory=i;
-       autoRate=(i+1)*1; // 選んだ工場の初期速度
+       autoRate=(i+1)*1; // 初期生産速度
        state="game";
      }
    });

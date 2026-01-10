@@ -3,15 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simple LINE風チャット</title>
+<title>Chat Fix</title>
 
 <style>
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
   font-family: system-ui, sans-serif;
   background: #f2f2f2;
 }
-.hidden { display:none; }
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  background: #f2f2f2;
+}
+
+.screen.active {
+  display: flex;
+}
+
 header {
   height: 50px;
   background: #06c755;
@@ -19,58 +34,32 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  padding: 0 12px;
+  flex-shrink: 0;
 }
-button {
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 14px;
-}
-.green { background:#06c755; color:white; }
-.gray { background:#ddd; }
-.screen {
-  height: 100vh;
+
+.center {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
-.list {
-  flex:1;
-  overflow-y:auto;
+
+button {
+  padding: 10px 14px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  background: #06c755;
+  color: white;
+  margin-top: 10px;
 }
-.item {
-  padding: 12px;
-  border-bottom: 1px solid #ddd;
-  background: white;
-}
-.chat {
-  flex:1;
-  padding:10px;
-  overflow-y:auto;
-}
-.msg {
-  max-width:70%;
-  padding:8px;
-  margin:5px;
-  border-radius:10px;
-}
-.me {
-  background:#06c755;
-  color:white;
-  margin-left:auto;
-}
-.other {
-  background:#ddd;
-}
-.inputArea {
-  display:flex;
-  padding:5px;
-  background:white;
-}
+
 input {
-  flex:1;
-  padding:8px;
-  font-size:16px;
+  padding: 10px;
+  font-size: 16px;
+  width: 70%;
 }
 </style>
 </head>
@@ -78,165 +67,45 @@ input {
 <body>
 
 <!-- 初期設定 -->
-<div id="setup" class="screen hidden">
+<div id="setup" class="screen">
   <header>初期設定</header>
-  <div style="padding:20px">
-    <input id="nameInput" placeholder="名前">
-    <button class="green" onclick="saveUser()">開始</button>
+  <div class="center">
+    <input id="nameInput" placeholder="名前を入力">
+    <button onclick="start()">開始</button>
   </div>
 </div>
 
-<!-- トーク一覧 -->
-<div id="home" class="screen hidden">
-  <header>
-    <span onclick="openUser()">☰</span>
-    トーク
-    <span onclick="newChat()">＋</span>
-  </header>
-  <div id="chatList" class="list"></div>
-</div>
-
-<!-- チャット画面 -->
-<div id="chatScreen" class="screen hidden">
-  <header>
-    <span onclick="backHome()">←</span>
-    <span id="chatTitle"></span>
-  </header>
-  <div id="messages" class="chat"></div>
-  <div class="inputArea">
-    <input id="msgInput">
-    <button class="green" onclick="sendMsg()">送信</button>
+<!-- ホーム -->
+<div id="home" class="screen">
+  <header>トーク一覧</header>
+  <div class="center">
+    <p>ここにトーク一覧が入る</p>
   </div>
 </div>
 
-<!-- ユーザー画面 -->
-<div id="userScreen" class="screen hidden">
-  <header>
-    <span onclick="backHome()">←</span>
-    ユーザー
-  </header>
-  <div style="padding:15px">
-    <div id="userName"></div>
-    <div id="friendCode"></div>
-    <input id="addCode" placeholder="フレンドコード">
-    <button onclick="addFriend()">追加</button>
-    <button class="gray" onclick="resetAll()">初期化</button>
-  </div>
-</div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, push, onValue, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCQNNj6Ff39wECAI6i8n1f2NXstF2k7duo",
-  authDomain: "chat-99077.firebaseapp.com",
-  databaseURL: "https://chat-99077-default-rtdb.firebaseio.com",
-  projectId: "chat-99077",
-  storageBucket: "chat-99077.firebasestorage.app",
-  messagingSenderId: "991554319310",
-  appId: "1:991554319310:web:a662919d90bc014e06319f"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-let userId = localStorage.getItem("userId");
-let userName = localStorage.getItem("name");
-let currentChat = null;
-
-function show(id){
-  document.querySelectorAll(".screen").forEach(s=>s.classList.add("hidden"));
-  document.getElementById(id).classList.remove("hidden");
+<script>
+function show(id) {
+  document.querySelectorAll('.screen')
+    .forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-if(!userId) show("setup");
-else loadHome();
-
-window.saveUser = () => {
-  const name = nameInput.value.trim();
-  if(!name) return alert("名前を入力");
-  userId = crypto.randomUUID();
-  const code = Math.random().toString(36).slice(2,7).toUpperCase();
-  localStorage.setItem("userId", userId);
-  localStorage.setItem("name", name);
-  localStorage.setItem("code", code);
-  set(ref(db,"users/"+userId),{
-    name, code, chats:{}
-  });
-  loadHome();
-};
-
-function loadHome(){
+if (localStorage.getItem("name")) {
   show("home");
-  chatList.innerHTML="";
-  onValue(ref(db,"users/"+userId+"/chats"), snap=>{
-    chatList.innerHTML="";
-    snap.forEach(c=>{
-      const div=document.createElement("div");
-      div.className="item";
-      div.textContent=c.key;
-      div.onclick=()=>openChat(c.key);
-      chatList.appendChild(div);
-    });
-  });
+} else {
+  show("setup");
 }
 
-window.newChat = async ()=>{
-  const code = prompt("相手のフレンドコード");
-  if(!code) return;
-  const users = await get(ref(db,"users"));
-  let target=null;
-  users.forEach(u=>{
-    if(u.val().code===code) target=u.key;
-  });
-  if(!target) return alert("見つからない");
-  const chatId = "chat_"+Date.now();
-  set(ref(db,"chats/"+chatId),{
-    members:{[userId]:true,[target]:true},
-    messages:{}
-  });
-  set(ref(db,"users/"+userId+"/chats/"+chatId),true);
-  set(ref(db,"users/"+target+"/chats/"+chatId),true);
-};
-
-function openChat(id){
-  currentChat=id;
-  show("chatScreen");
-  messages.innerHTML="";
-  onValue(ref(db,"chats/"+id+"/messages"), snap=>{
-    messages.innerHTML="";
-    snap.forEach(m=>{
-      const d=document.createElement("div");
-      d.className="msg "+(m.val().sender===userId?"me":"other");
-      d.textContent=m.val().text;
-      messages.appendChild(d);
-      messages.scrollTop=messages.scrollHeight;
-    });
-  });
+function start() {
+  const name = nameInput.value.trim();
+  if (!name) {
+    alert("名前を入れて");
+    return;
+  }
+  localStorage.setItem("name", name);
+  show("home");
 }
-
-window.sendMsg=()=>{
-  if(!msgInput.value) return;
-  push(ref(db,"chats/"+currentChat+"/messages"),{
-    sender:userId,
-    text:msgInput.value,
-    time:Date.now()
-  });
-  msgInput.value="";
-};
-
-window.backHome=()=>loadHome();
-window.openUser=()=>{
-  show("userScreen");
-  userName.textContent="名前: "+localStorage.getItem("name");
-  friendCode.textContent="コード: "+localStorage.getItem("code");
-};
-window.addFriend=()=>alert("自動追加済み");
-window.resetAll=()=>{
-  localStorage.clear();
-  location.reload();
-};
 </script>
+
 </body>
 </html>

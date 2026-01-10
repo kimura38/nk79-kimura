@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>リアルタイムグループチャット</title>
 
-<!-- Firebase（HTML用） -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
@@ -22,6 +21,10 @@ body {
 }
 .msg {
   margin: 6px 0;
+}
+.system {
+  color: #aaa;
+  font-size: 14px;
 }
 #input {
   display: flex;
@@ -57,24 +60,54 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-
 const db = firebase.database();
 const chatRef = db.ref("chat");
 
-function send() {
-  const name = document.getElementById("name").value || "名無し";
-  const text = document.getElementById("text").value;
-  if (!text) return;
+let userName = localStorage.getItem("name") || "";
 
-  chatRef.push({ name, text });
-  document.getElementById("text").value = "";
+document.getElementById("name").value = userName;
+
+if (userName) {
+  system(`${userName} が入室しました`);
+}
+
+window.addEventListener("beforeunload", () => {
+  if (userName) system(`${userName} が退出しました`);
+});
+
+function system(text) {
+  chatRef.push({ system: true, text });
+}
+
+function send() {
+  const nameInput = document.getElementById("name");
+  const textInput = document.getElementById("text");
+
+  userName = nameInput.value || "名無し";
+  localStorage.setItem("name", userName);
+
+  if (!textInput.value) return;
+
+  chatRef.push({
+    name: userName,
+    text: textInput.value
+  });
+
+  textInput.value = "";
 }
 
 chatRef.on("child_added", snap => {
   const msg = snap.val();
   const div = document.createElement("div");
-  div.className = "msg";
-  div.textContent = `${msg.name}: ${msg.text}`;
+
+  if (msg.system) {
+    div.className = "system";
+    div.textContent = msg.text;
+  } else {
+    div.className = "msg";
+    div.textContent = `${msg.name}: ${msg.text}`;
+  }
+
   document.getElementById("messages").appendChild(div);
 });
 </script>

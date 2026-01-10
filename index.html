@@ -2,269 +2,100 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>放置工場ゲーム</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>グループチャット</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-html,body{
- margin:0; padding:0;
- width:100%; height:100%;
- background:#222; font-family:sans-serif;
- overflow:hidden;
+body{
+  margin:0; padding:0;
+  font-family:sans-serif;
+  background:#f2f2f2;
+  display:flex; flex-direction:column; height:100vh;
 }
-canvas{
- display:block;
- background:#333;
+#chatBox{
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+  background:#e5e5e5;
 }
-button{
- position:absolute; border:none; border-radius:10px;
- font-size:18px; cursor:pointer; z-index:10;
+.message{
+  padding:8px 12px;
+  margin:5px 0;
+  border-radius:12px;
+  max-width:70%;
+  word-wrap:break-word;
 }
-#upgradeBtn{ background:#2196f3; color:white; }
-#scoreDisplay{ position:absolute; top:10px; left:10px; color:white; font-size:24px; z-index:10; }
-#factoryName{ position:absolute; top:40px; left:10px; color:white; font-size:20px; z-index:10; }
-#autoRateDisplay{ position:absolute; top:70px; left:10px; color:white; font-size:20px; z-index:10; }
-#settingsBtn{ position:absolute; top:10px; right:10px; font-size:24px; background:#666; color:white; border-radius:50%; width:40px; height:40px; }
-#menu{ position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; color:white; text-align:center; padding-top:100px; font-size:20px; }
-#menu button{ margin:10px; padding:10px 20px; font-size:18px; }
-#settingsMenu{ position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(50,50,50,0.9); display:none; color:white; text-align:center; padding-top:100px; font-size:20px; }
-#settingsMenu button{ margin:10px; padding:10px 20px; font-size:18px; }
+.message.self{ background:#2196f3; color:white; margin-left:auto; }
+.message.other{ background:#ddd; color:black; margin-right:auto; }
+#inputArea{
+  display:flex; padding:10px; background:#fff;
+  border-top:1px solid #ccc;
+}
+#inputArea input{
+  flex:1; padding:10px; font-size:16px; border-radius:8px; border:1px solid #ccc;
+}
+#inputArea button{
+  margin-left:10px; padding:10px 20px; font-size:16px; border:none; border-radius:8px;
+  background:#2196f3; color:white; cursor:pointer;
+}
 </style>
 </head>
 <body>
 
-<div id="scoreDisplay">金: 0</div>
-<div id="factoryName"></div>
-<div id="autoRateDisplay"></div>
-<button id="upgradeBtn">アップグレード</button>
-<button id="settingsBtn">⚙</button>
-
-<div id="menu">
- <p id="upgradeText">アップグレードしますか？</p>
- <button id="okBtn">OK</button>
- <button id="cancelBtn">キャンセル</button>
+<div id="chatBox"></div>
+<div id="inputArea">
+  <input type="text" id="messageInput" placeholder="メッセージを入力">
+  <button id="sendBtn">送信</button>
 </div>
-
-<div id="settingsMenu">
- <p id="settingsTitle">設定</p>
- <button id="langBtn">言語: 日本語</button>
- <button id="resetBtn">データ初期化</button>
- <button id="closeSettings">閉じる</button>
-</div>
-
-<canvas id="game"></canvas>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-const upgradeBtn=document.getElementById("upgradeBtn");
-const scoreDisplay=document.getElementById("scoreDisplay");
-const factoryNameDisplay=document.getElementById("factoryName");
-const autoRateDisplay=document.getElementById("autoRateDisplay");
-const menu=document.getElementById("menu");
-const okBtn=document.getElementById("okBtn");
-const cancelBtn=document.getElementById("cancelBtn");
-const settingsBtn=document.getElementById("settingsBtn");
-const settingsMenu=document.getElementById("settingsMenu");
-const langBtn=document.getElementById("langBtn");
-const resetBtn=document.getElementById("resetBtn");
-const closeSettings=document.getElementById("closeSettings");
+// 初期ユーザー名（後で入力欄追加可能）
+let username = "あなた";
 
-let W,H;
-let score=0;
-let autoRate=1;
-let lastTime=Date.now();
-let particles=[];
-let state="select"; // 初回は工場選択
-let selectedFactory=null;
-let lang="ja";
+// メッセージ配列
+let messages = [];
 
-// 工場定義（利点・欠点修正済）
-const factories=[
- {name:"鉄工場",adv:"初期生産速度が速い",dis:"アップグレードコストが高い"},
- {name:"木工場",adv:"アップグレードが安い",dis:"初期生産速度が遅い"},
- {name:"化学工場",adv:"バランス型",dis:"初期コスト中"},
-];
-
-// ウィンドウサイズ調整
-function resize(){
- W=window.innerWidth; H=window.innerHeight;
- canvas.width=W; canvas.height=H;
- upgradeBtn.style.bottom='20px';
- upgradeBtn.style.right='20px';
- settingsBtn.style.top='10px';
- settingsBtn.style.right='10px';
-}
-window.addEventListener("resize",resize);
-resize();
-
-// データ保存
-function saveData(){
- localStorage.setItem("score",score);
- localStorage.setItem("autoRate",autoRate);
- localStorage.setItem("selectedFactory",selectedFactory);
- localStorage.setItem("lastVisit",Date.now());
+// localStorage読み込み
+if(localStorage.getItem("chatMessages")){
+  messages = JSON.parse(localStorage.getItem("chatMessages"));
 }
 
-// データ読み込み
-function loadData(){
- let storedScore=parseFloat(localStorage.getItem("score"));
- let storedRate=parseFloat(localStorage.getItem("autoRate"));
- let storedFactory=parseInt(localStorage.getItem("selectedFactory"));
- if(!isNaN(storedScore)) score=storedScore;
- if(!isNaN(storedRate)) autoRate=storedRate;
- if(!isNaN(storedFactory)) selectedFactory=storedFactory;
- if(selectedFactory!==null) state="game";
- updateUI();
+// DOM要素
+const chatBox = document.getElementById("chatBox");
+const input = document.getElementById("messageInput");
+const sendBtn = document.getElementById("sendBtn");
+
+// メッセージ表示
+function renderMessages(){
+  chatBox.innerHTML = "";
+  messages.forEach(msg=>{
+    const div = document.createElement("div");
+    div.classList.add("message");
+    div.classList.add(msg.user===username?"self":"other");
+    div.innerText = msg.user + ": " + msg.text;
+    chatBox.appendChild(div);
+  });
+  chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// UI更新
-function updateUI(){
- scoreDisplay.innerText=(lang==="ja"?"金: ":"Gold: ")+Math.floor(score);
- factoryNameDisplay.innerText=(lang==="ja"?"工場: ":"Factory: ")+(selectedFactory!==null?factories[selectedFactory].name:"");
- autoRateDisplay.innerText=(lang==="ja"?"生産速度: ":"Rate: ")+autoRate.toFixed(1)+(lang==="ja"?"/秒":"/sec");
+// メッセージ送信
+function sendMessage(){
+  const text = input.value.trim();
+  if(text==="") return;
+  const msgObj = {user:username, text:text, time:Date.now()};
+  messages.push(msgObj);
+  localStorage.setItem("chatMessages", JSON.stringify(messages));
+  renderMessages();
+  input.value="";
 }
 
-// 放置加算
-window.addEventListener("load",()=>{
- let lastVisit=localStorage.getItem("lastVisit");
- if(lastVisit){
-   let elapsed=(Date.now()-parseInt(lastVisit))/1000;
-   score+=autoRate*elapsed;
- }
- loadData();
+// Enterで送信
+input.addEventListener("keypress", e=>{
+  if(e.key==="Enter") sendMessage();
 });
-window.addEventListener("beforeunload",()=>{ saveData(); });
+sendBtn.addEventListener("click", sendMessage);
 
-// アップグレード
-upgradeBtn.addEventListener("click",()=>{
- if(state!=="game") return;
- if(score>=10){
-   menu.style.display="block";
-   document.getElementById("upgradeText").innerText=lang==="ja"?"アップグレードしますか？ (10金)":"Upgrade? (10 gold)";
- }
-});
-okBtn.addEventListener("click",()=>{
- score-=10;
- autoRate+=0.5;
- spawnParticle();
- menu.style.display="none";
- updateUI();
- saveData();
-});
-cancelBtn.addEventListener("click",()=>{ menu.style.display="none"; });
-
-// 設定
-settingsBtn.addEventListener("click",()=>{ settingsMenu.style.display="block"; });
-closeSettings.addEventListener("click",()=>{ settingsMenu.style.display="none"; });
-langBtn.addEventListener("click",()=>{
- if(lang==="ja"){ lang="en"; langBtn.innerText="Language: English"; } 
- else { lang="ja"; langBtn.innerText="言語: 日本語"; }
- updateUI();
-});
-resetBtn.addEventListener("click",()=>{
- score=0; autoRate=1; selectedFactory=null; state="select"; 
- saveData();
- updateUI();
- settingsMenu.style.display="none";
-});
-
-// 工場選択画面描画
-function drawFactorySelect(){
- ctx.clearRect(0,0,W,H);
- ctx.fillStyle="white";
- ctx.font="30px sans-serif";
- ctx.fillText(lang==="ja"?"工場を選択":"Select Factory", W/4, 50);
- factories.forEach((f,i)=>{
-   ctx.fillStyle=i===selectedFactory?"yellow":"white";
-   ctx.fillText(f.name, W/4, 120+i*60);
-   ctx.font="16px sans-serif";
-   ctx.fillText(lang==="ja"?"利点: "+f.adv:"Adv: "+f.adv, W/4+200, 120+i*60);
-   ctx.fillText(lang==="ja"?"欠点: "+f.dis:"Dis: "+f.dis, W/4+200, 140+i*60);
-   ctx.font="30px sans-serif";
- });
- ctx.fillText(lang==="ja"?"クリックで選択":"Click to select", W/4, H-50);
-}
-
-// 金パーティクル
-function spawnParticle(){
- let x=W/2; let y=H/2-40;
- let dx=(Math.random()-0.5)*1;
- let dy=-Math.random()*1-1;
- let size=6;
- particles.push({x,y,dx,dy,size,alpha:1});
-}
-
-// 描画
-function draw(){
- ctx.clearRect(0,0,W,H);
-
- if(state==="select"){ drawFactorySelect(); return; }
-
- // 背景簡易装置
- ctx.fillStyle="#444";
- ctx.fillRect(0,H/2+50,W,20); 
- ctx.fillStyle="#222";
- ctx.fillRect(0,H/2+70,W,30); 
-
- // 工場描画
- ctx.fillStyle='#888';
- ctx.fillRect(W/2-50,H/2-50,100,100);
- ctx.fillStyle='rgba(0,0,0,0.3)';
- ctx.fillRect(W/2-50,H/2-40,100,10); 
- ctx.fillStyle='rgba(200,200,200,0.3)';
- ctx.beginPath();
- ctx.ellipse(W/2,H/2-60,10,20,0,0,Math.PI*2); 
- ctx.fill();
-
- // 金パーティクル
- particles=particles.filter(p=>{
-   ctx.fillStyle=`rgba(255,215,0,${p.alpha})`;
-   ctx.beginPath();
-   ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-   ctx.fill();
-   p.x+=p.dx; p.y+=p.dy; p.dy+=0.05;
-   p.alpha-=0.01;
-   return p.alpha>0;
- });
-
- updateUI();
-}
-
-// 更新
-function update(){
- const now=Date.now();
- const delta=(now-lastTime)/1000;
- lastTime=now;
- if(state==="game"){
-   let increase=autoRate*delta;
-   for(let i=0;i<Math.floor(increase);i++) spawnParticle();
-   score+=increase;
- }
-}
-
-// ループ
-function loop(){
- update();
- draw();
- requestAnimationFrame(loop);
-}
-loop();
-
-// 工場選択クリックでゲーム開始
-canvas.addEventListener("pointerdown",(event)=>{
- if(state==="select"){
-   let y=event.clientY;
-   factories.forEach((f,i)=>{
-     if(y>120+i*60-20 && y<120+i*60+20){
-       selectedFactory=i;
-       autoRate=(i+1)*1; 
-       state="game";
-       saveData();
-       updateUI();
-     }
-   });
- }
-});
+// 最初の描画
+renderMessages();
 </script>
 
 </body>

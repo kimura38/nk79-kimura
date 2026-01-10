@@ -23,8 +23,11 @@ button{
 #scoreDisplay{ position:absolute; top:10px; left:10px; color:white; font-size:24px; z-index:10; }
 #factoryName{ position:absolute; top:40px; left:10px; color:white; font-size:20px; z-index:10; }
 #autoRateDisplay{ position:absolute; top:70px; left:10px; color:white; font-size:20px; z-index:10; }
+#settingsBtn{ position:absolute; top:10px; right:10px; font-size:24px; background:#666; color:white; border-radius:50%; width:40px; height:40px; }
 #menu{ position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; color:white; text-align:center; padding-top:100px; font-size:20px; }
 #menu button{ margin:10px; padding:10px 20px; font-size:18px; }
+#settingsMenu{ position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(50,50,50,0.9); display:none; color:white; text-align:center; padding-top:100px; font-size:20px; }
+#settingsMenu button{ margin:10px; padding:10px 20px; font-size:18px; }
 </style>
 </head>
 <body>
@@ -33,11 +36,19 @@ button{
 <div id="factoryName"></div>
 <div id="autoRateDisplay"></div>
 <button id="upgradeBtn">アップグレード</button>
+<button id="settingsBtn">⚙</button>
 
 <div id="menu">
  <p id="upgradeText">アップグレードしますか？</p>
  <button id="okBtn">OK</button>
  <button id="cancelBtn">キャンセル</button>
+</div>
+
+<div id="settingsMenu">
+ <p id="settingsTitle">設定</p>
+ <button id="langBtn">言語: 日本語</button>
+ <button id="resetBtn">データ初期化</button>
+ <button id="closeSettings">閉じる</button>
 </div>
 
 <canvas id="game"></canvas>
@@ -52,25 +63,25 @@ const autoRateDisplay=document.getElementById("autoRateDisplay");
 const menu=document.getElementById("menu");
 const okBtn=document.getElementById("okBtn");
 const cancelBtn=document.getElementById("cancelBtn");
+const settingsBtn=document.getElementById("settingsBtn");
+const settingsMenu=document.getElementById("settingsMenu");
+const langBtn=document.getElementById("langBtn");
+const resetBtn=document.getElementById("resetBtn");
+const closeSettings=document.getElementById("closeSettings");
 
 let W,H;
 let score=0;
 let autoRate=1;
 let lastTime=Date.now();
 let particles=[];
-let particleTimer=0;
-
-// デバイス判定
-const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-
-// ゲーム状態
 let state="select"; // 初回は工場選択
 let selectedFactory=null;
+let lang="ja";
 
 // 工場定義
 const factories=[
- {name:"鉄工場",adv:"初期生産速い",dis:"アップグレード高い"},
- {name:"木工場",adv:"アップグレード安い",dis:"初期生産遅い"},
+ {name:"鉄工場",adv:"初期生産速度が速い",dis:"アップグレードコストが高い"},
+ {name:"木工場",adv:"アップグレードが安い",dis:"初期生産速度が遅い"},
  {name:"化学工場",adv:"バランス型",dis:"初期コスト中"},
 ];
 
@@ -80,27 +91,46 @@ function resize(){
  canvas.width=W; canvas.height=H;
  upgradeBtn.style.bottom='20px';
  upgradeBtn.style.right='20px';
+ settingsBtn.style.top='10px';
+ settingsBtn.style.right='10px';
 }
 window.addEventListener("resize",resize);
 resize();
 
-// localStorage放置報酬
+// localStorageから読み込み
+function loadData(){
+ let storedScore=parseFloat(localStorage.getItem("score"));
+ let storedRate=parseFloat(localStorage.getItem("autoRate"));
+ let storedFactory=parseInt(localStorage.getItem("selectedFactory"));
+ if(!isNaN(storedScore)) score=storedScore;
+ if(!isNaN(storedRate)) autoRate=storedRate;
+ if(!isNaN(storedFactory)) selectedFactory=storedFactory;
+ if(selectedFactory!==null) state="game";
+}
+function saveData(){
+ localStorage.setItem("score",score);
+ localStorage.setItem("autoRate",autoRate);
+ localStorage.setItem("selectedFactory",selectedFactory);
+ localStorage.setItem("lastVisit",Date.now());
+}
+
+// 放置加算
 window.addEventListener("load",()=>{
  let lastVisit=localStorage.getItem("lastVisit");
  if(lastVisit){
    let elapsed=(Date.now()-parseInt(lastVisit))/1000;
    score+=autoRate*elapsed;
  }
- localStorage.setItem("lastVisit",Date.now());
+ loadData();
 });
-window.addEventListener("beforeunload",()=>{ localStorage.setItem("lastVisit",Date.now()); });
+window.addEventListener("beforeunload",()=>{ saveData(); });
 
-// アップグレードボタン
+// アップグレード
 upgradeBtn.addEventListener("click",()=>{
  if(state!=="game") return;
  if(score>=10){
    menu.style.display="block";
-   document.getElementById("upgradeText").innerText="アップグレードしますか？ (10金)";
+   document.getElementById("upgradeText").innerText=lang==="ja"?"アップグレードしますか？ (10金)":"Upgrade? (10 gold)";
  }
 });
 okBtn.addEventListener("click",()=>{
@@ -108,27 +138,40 @@ okBtn.addEventListener("click",()=>{
  autoRate+=0.5;
  spawnParticle();
  menu.style.display="none";
+ saveData();
 });
 cancelBtn.addEventListener("click",()=>{ menu.style.display="none"; });
+
+// 設定
+settingsBtn.addEventListener("click",()=>{ settingsMenu.style.display="block"; });
+closeSettings.addEventListener("click",()=>{ settingsMenu.style.display="none"; });
+langBtn.addEventListener("click",()=>{
+ if(lang==="ja"){ lang="en"; langBtn.innerText="Language: English"; } 
+ else { lang="ja"; langBtn.innerText="言語: 日本語"; }
+});
+resetBtn.addEventListener("click",()=>{
+ score=0; autoRate=1; selectedFactory=null; state="select"; saveData();
+ settingsMenu.style.display="none";
+});
 
 // 工場選択画面描画
 function drawFactorySelect(){
  ctx.clearRect(0,0,W,H);
  ctx.fillStyle="white";
  ctx.font="30px sans-serif";
- ctx.fillText("工場を選択", W/4, 50);
+ ctx.fillText(lang==="ja"?"工場を選択":"Select Factory", W/4, 50);
  factories.forEach((f,i)=>{
    ctx.fillStyle=i===selectedFactory?"yellow":"white";
    ctx.fillText(f.name, W/4, 120+i*60);
    ctx.font="16px sans-serif";
-   ctx.fillText("利点: "+f.adv, W/4+200, 120+i*60);
-   ctx.fillText("欠点: "+f.dis, W/4+200, 140+i*60);
+   ctx.fillText(lang==="ja"?"利点: "+f.adv:"Adv: "+f.adv, W/4+200, 120+i*60);
+   ctx.fillText(lang==="ja"?"欠点: "+f.dis:"Dis: "+f.dis, W/4+200, 140+i*60);
    ctx.font="30px sans-serif";
  });
- ctx.fillText("クリックで選択", W/4, H-50);
+ ctx.fillText(lang==="ja"?"クリックで選択":"Click to select", W/4, H-50);
 }
 
-// 金パーティクル生成
+// 金パーティクル
 function spawnParticle(){
  let x=W/2; let y=H/2-40;
  let dx=(Math.random()-0.5)*1;
@@ -145,18 +188,18 @@ function draw(){
 
  // 背景簡易装置
  ctx.fillStyle="#444";
- ctx.fillRect(0,H/2+50,W,20); // 床
+ ctx.fillRect(0,H/2+50,W,20); 
  ctx.fillStyle="#222";
- ctx.fillRect(0,H/2+70,W,30); // 装置ベース
+ ctx.fillRect(0,H/2+70,W,30); 
 
  // 工場描画
  ctx.fillStyle='#888';
  ctx.fillRect(W/2-50,H/2-50,100,100);
  ctx.fillStyle='rgba(0,0,0,0.3)';
- ctx.fillRect(W/2-50,H/2-40,100,10); // 影
+ ctx.fillRect(W/2-50,H/2-40,100,10); 
  ctx.fillStyle='rgba(200,200,200,0.3)';
  ctx.beginPath();
- ctx.ellipse(W/2,H/2-60,10,20,0,0,Math.PI*2); // 煙
+ ctx.ellipse(W/2,H/2-60,10,20,0,0,Math.PI*2); 
  ctx.fill();
 
  // 金パーティクル
@@ -171,9 +214,9 @@ function draw(){
  });
 
  // 情報パネル
- scoreDisplay.innerText="金: "+Math.floor(score);
- factoryNameDisplay.innerText="工場: "+factories[selectedFactory].name;
- autoRateDisplay.innerText="生産速度: "+autoRate.toFixed(1)+"/秒";
+ scoreDisplay.innerText=(lang==="ja"?"金: ":"Gold: ")+Math.floor(score);
+ factoryNameDisplay.innerText=(lang==="ja"?"工場: ":"Factory: ")+ (selectedFactory!==null?factories[selectedFactory].name:"");
+ autoRateDisplay.innerText=(lang==="ja"?"生産速度: ":"Rate: ")+autoRate.toFixed(1)+(lang==="ja"?"/秒":"/sec");
 }
 
 // 更新
@@ -183,7 +226,7 @@ function update(){
  lastTime=now;
  if(state==="game"){
    let increase=autoRate*delta;
-   for(let i=0;i<Math.floor(increase);i++) spawnParticle(); // 1金ごとに1個
+   for(let i=0;i<Math.floor(increase);i++) spawnParticle();
    score+=increase;
  }
 }
@@ -203,8 +246,9 @@ canvas.addEventListener("pointerdown",(event)=>{
    factories.forEach((f,i)=>{
      if(y>120+i*60-20 && y<120+i*60+20){
        selectedFactory=i;
-       autoRate=(i+1)*1; // 初期生産速度
+       autoRate=(i+1)*1; 
        state="game";
+       saveData();
      }
    });
  }

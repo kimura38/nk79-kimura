@@ -21,6 +21,8 @@ button{
 }
 #upgradeBtn{ background:#2196f3; color:white; }
 #scoreDisplay{ position:absolute; top:10px; left:10px; color:white; font-size:24px; z-index:10; }
+#factoryName{ position:absolute; top:40px; left:10px; color:white; font-size:20px; z-index:10; }
+#autoRateDisplay{ position:absolute; top:70px; left:10px; color:white; font-size:20px; z-index:10; }
 #menu{ position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; color:white; text-align:center; padding-top:100px; font-size:20px; }
 #menu button{ margin:10px; padding:10px 20px; font-size:18px; }
 </style>
@@ -28,6 +30,8 @@ button{
 <body>
 
 <div id="scoreDisplay">金: 0</div>
+<div id="factoryName"></div>
+<div id="autoRateDisplay"></div>
 <button id="upgradeBtn">アップグレード</button>
 
 <div id="menu">
@@ -43,6 +47,8 @@ const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 const upgradeBtn=document.getElementById("upgradeBtn");
 const scoreDisplay=document.getElementById("scoreDisplay");
+const factoryNameDisplay=document.getElementById("factoryName");
+const autoRateDisplay=document.getElementById("autoRateDisplay");
 const menu=document.getElementById("menu");
 const okBtn=document.getElementById("okBtn");
 const cancelBtn=document.getElementById("cancelBtn");
@@ -54,21 +60,21 @@ let lastTime=Date.now();
 let particles=[];
 let particleTimer=0;
 
-// === デバイス判定 ===
+// デバイス判定
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
-// === ゲーム状態 ===
+// ゲーム状態
 let state="select"; // 初回は工場選択
 let selectedFactory=null;
 
-// === 工場定義 ===
+// 工場定義
 const factories=[
  {name:"鉄工場",adv:"初期生産速い",dis:"アップグレード高い"},
  {name:"木工場",adv:"アップグレード安い",dis:"初期生産遅い"},
  {name:"化学工場",adv:"バランス型",dis:"初期コスト中"},
 ];
 
-// === ウィンドウサイズ調整 ===
+// ウィンドウサイズ調整
 function resize(){
  W=window.innerWidth; H=window.innerHeight;
  canvas.width=W; canvas.height=H;
@@ -78,7 +84,7 @@ function resize(){
 window.addEventListener("resize",resize);
 resize();
 
-// === localStorage放置報酬 ===
+// localStorage放置報酬
 window.addEventListener("load",()=>{
  let lastVisit=localStorage.getItem("lastVisit");
  if(lastVisit){
@@ -89,7 +95,7 @@ window.addEventListener("load",()=>{
 });
 window.addEventListener("beforeunload",()=>{ localStorage.setItem("lastVisit",Date.now()); });
 
-// === アップグレードボタン ===
+// アップグレードボタン
 upgradeBtn.addEventListener("click",()=>{
  if(state!=="game") return;
  if(score>=10){
@@ -105,7 +111,7 @@ okBtn.addEventListener("click",()=>{
 });
 cancelBtn.addEventListener("click",()=>{ menu.style.display="none"; });
 
-// === 工場選択画面描画 ===
+// 工場選択画面描画
 function drawFactorySelect(){
  ctx.clearRect(0,0,W,H);
  ctx.fillStyle="white";
@@ -122,7 +128,7 @@ function drawFactorySelect(){
  ctx.fillText("クリックで選択", W/4, H-50);
 }
 
-// === 金パーティクル生成 ===
+// 金パーティクル生成
 function spawnParticle(){
  let x=W/2; let y=H/2-40;
  let dx=(Math.random()-0.5)*1;
@@ -131,13 +137,13 @@ function spawnParticle(){
  particles.push({x,y,dx,dy,size,alpha:1});
 }
 
-// === 描画 ===
+// 描画
 function draw(){
  ctx.clearRect(0,0,W,H);
 
  if(state==="select"){ drawFactorySelect(); return; }
 
- // 背景本物感
+ // 背景簡易装置
  ctx.fillStyle="#444";
  ctx.fillRect(0,H/2+50,W,20); // 床
  ctx.fillStyle="#222";
@@ -146,13 +152,11 @@ function draw(){
  // 工場描画
  ctx.fillStyle='#888';
  ctx.fillRect(W/2-50,H/2-50,100,100);
- // 工場影
  ctx.fillStyle='rgba(0,0,0,0.3)';
- ctx.fillRect(W/2-50,H/2-40,100,10);
- // 煙
+ ctx.fillRect(W/2-50,H/2-40,100,10); // 影
  ctx.fillStyle='rgba(200,200,200,0.3)';
  ctx.beginPath();
- ctx.ellipse(W/2,H/2-60,10,20,0,0,Math.PI*2);
+ ctx.ellipse(W/2,H/2-60,10,20,0,0,Math.PI*2); // 煙
  ctx.fill();
 
  // 金パーティクル
@@ -161,27 +165,30 @@ function draw(){
    ctx.beginPath();
    ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
    ctx.fill();
-   p.x+=p.dx; p.y+=p.dy; p.dy+=0.05; // 重力
+   p.x+=p.dx; p.y+=p.dy; p.dy+=0.05;
    p.alpha-=0.01;
    return p.alpha>0;
  });
 
+ // 情報パネル
  scoreDisplay.innerText="金: "+Math.floor(score);
+ factoryNameDisplay.innerText="工場: "+factories[selectedFactory].name;
+ autoRateDisplay.innerText="生産速度: "+autoRate.toFixed(1)+"/秒";
 }
 
-// === 更新 ===
+// 更新
 function update(){
  const now=Date.now();
  const delta=(now-lastTime)/1000;
  lastTime=now;
  if(state==="game"){
    let increase=autoRate*delta;
-   for(let i=0;i<Math.floor(increase);i++) spawnParticle(); // 1金ごとに1パーティクル
+   for(let i=0;i<Math.floor(increase);i++) spawnParticle(); // 1金ごとに1個
    score+=increase;
  }
 }
 
-// === ループ ===
+// ループ
 function loop(){
  update();
  draw();
@@ -189,10 +196,10 @@ function loop(){
 }
 loop();
 
-// === 工場選択クリックでゲーム開始 ===
+// 工場選択クリックでゲーム開始
 canvas.addEventListener("pointerdown",(event)=>{
  if(state==="select"){
-   let y = event.clientY;
+   let y=event.clientY;
    factories.forEach((f,i)=>{
      if(y>120+i*60-20 && y<120+i*60+20){
        selectedFactory=i;

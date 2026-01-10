@@ -78,7 +78,7 @@ let state="select"; // 初回は工場選択
 let selectedFactory=null;
 let lang="ja";
 
-// 工場定義
+// 工場定義（利点・欠点修正済）
 const factories=[
  {name:"鉄工場",adv:"初期生産速度が速い",dis:"アップグレードコストが高い"},
  {name:"木工場",adv:"アップグレードが安い",dis:"初期生産速度が遅い"},
@@ -97,7 +97,15 @@ function resize(){
 window.addEventListener("resize",resize);
 resize();
 
-// localStorageから読み込み
+// データ保存
+function saveData(){
+ localStorage.setItem("score",score);
+ localStorage.setItem("autoRate",autoRate);
+ localStorage.setItem("selectedFactory",selectedFactory);
+ localStorage.setItem("lastVisit",Date.now());
+}
+
+// データ読み込み
 function loadData(){
  let storedScore=parseFloat(localStorage.getItem("score"));
  let storedRate=parseFloat(localStorage.getItem("autoRate"));
@@ -106,12 +114,14 @@ function loadData(){
  if(!isNaN(storedRate)) autoRate=storedRate;
  if(!isNaN(storedFactory)) selectedFactory=storedFactory;
  if(selectedFactory!==null) state="game";
+ updateUI();
 }
-function saveData(){
- localStorage.setItem("score",score);
- localStorage.setItem("autoRate",autoRate);
- localStorage.setItem("selectedFactory",selectedFactory);
- localStorage.setItem("lastVisit",Date.now());
+
+// UI更新
+function updateUI(){
+ scoreDisplay.innerText=(lang==="ja"?"金: ":"Gold: ")+Math.floor(score);
+ factoryNameDisplay.innerText=(lang==="ja"?"工場: ":"Factory: ")+(selectedFactory!==null?factories[selectedFactory].name:"");
+ autoRateDisplay.innerText=(lang==="ja"?"生産速度: ":"Rate: ")+autoRate.toFixed(1)+(lang==="ja"?"/秒":"/sec");
 }
 
 // 放置加算
@@ -138,6 +148,7 @@ okBtn.addEventListener("click",()=>{
  autoRate+=0.5;
  spawnParticle();
  menu.style.display="none";
+ updateUI();
  saveData();
 });
 cancelBtn.addEventListener("click",()=>{ menu.style.display="none"; });
@@ -148,9 +159,12 @@ closeSettings.addEventListener("click",()=>{ settingsMenu.style.display="none"; 
 langBtn.addEventListener("click",()=>{
  if(lang==="ja"){ lang="en"; langBtn.innerText="Language: English"; } 
  else { lang="ja"; langBtn.innerText="言語: 日本語"; }
+ updateUI();
 });
 resetBtn.addEventListener("click",()=>{
- score=0; autoRate=1; selectedFactory=null; state="select"; saveData();
+ score=0; autoRate=1; selectedFactory=null; state="select"; 
+ saveData();
+ updateUI();
  settingsMenu.style.display="none";
 });
 
@@ -213,10 +227,7 @@ function draw(){
    return p.alpha>0;
  });
 
- // 情報パネル
- scoreDisplay.innerText=(lang==="ja"?"金: ":"Gold: ")+Math.floor(score);
- factoryNameDisplay.innerText=(lang==="ja"?"工場: ":"Factory: ")+ (selectedFactory!==null?factories[selectedFactory].name:"");
- autoRateDisplay.innerText=(lang==="ja"?"生産速度: ":"Rate: ")+autoRate.toFixed(1)+(lang==="ja"?"/秒":"/sec");
+ updateUI();
 }
 
 // 更新
@@ -249,6 +260,7 @@ canvas.addEventListener("pointerdown",(event)=>{
        autoRate=(i+1)*1; 
        state="game";
        saveData();
+       updateUI();
      }
    });
  }

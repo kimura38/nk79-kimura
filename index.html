@@ -15,13 +15,12 @@ canvas{
  display:block;
  background:#333;
 }
-#collectBtn,#upgradeBtn{
+#upgradeBtn{
  position:absolute; border:none; border-radius:10px;
  font-size:20px; cursor:pointer;
  z-index:10;
+ background:#2196f3; color:white;
 }
-#collectBtn{ background:#4caf50; color:white; }
-#upgradeBtn{ background:#2196f3; color:white; }
 #scoreDisplay{
  position:absolute; top:10px; left:10px; color:white; font-size:24px; z-index:10;
 }
@@ -30,22 +29,20 @@ canvas{
 <body>
 
 <div id="scoreDisplay">資源: 0</div>
-<button id="collectBtn">回収</button>
 <button id="upgradeBtn">アップグレード</button>
 <canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const collectBtn = document.getElementById("collectBtn");
 const upgradeBtn = document.getElementById("upgradeBtn");
 const scoreDisplay = document.getElementById("scoreDisplay");
 
 let W,H;
 let score=0;
 let autoRate=1; // 放置報酬: 1/sec
-let collectAmount=1; // 1回回収量
 let floatingScores=[];
+let particles=[]; // 資源流出演出
 let lastTime=Date.now();
 
 // デバイス判定
@@ -55,19 +52,11 @@ function resize(){
  W=window.innerWidth; H=window.innerHeight;
  canvas.width=W; canvas.height=H;
  if(isMobile){
-   collectBtn.style.width='120px';
-   collectBtn.style.height='60px';
-   collectBtn.style.left=(W/2-60)+'px';
-   collectBtn.style.bottom='20px';
    upgradeBtn.style.width='120px';
    upgradeBtn.style.height='60px';
    upgradeBtn.style.right='20px';
    upgradeBtn.style.bottom='20px';
  }else{
-   collectBtn.style.width='100px';
-   collectBtn.style.height='50px';
-   collectBtn.style.left='20px';
-   collectBtn.style.bottom='20px';
    upgradeBtn.style.width='120px';
    upgradeBtn.style.height='50px';
    upgradeBtn.style.right='20px';
@@ -77,21 +66,35 @@ function resize(){
 window.addEventListener("resize",resize);
 resize();
 
-// 回収ボタン
-collectBtn.addEventListener("click",()=>{
- score += collectAmount;
- floatingScores.push({text:'+'+collectAmount,x:W/2,y:H/2,alpha:1});
+// === localStorageから放置時間計算 ===
+window.addEventListener("load",()=>{
+ let lastVisit = localStorage.getItem("lastVisit");
+ if(lastVisit){
+   let elapsed = (Date.now() - parseInt(lastVisit))/1000;
+   score += autoRate * elapsed;
+ }
+ localStorage.setItem("lastVisit", Date.now());
 });
+window.addEventListener("beforeunload",()=>{ localStorage.setItem("lastVisit", Date.now()); });
 
 // アップグレードボタン
 upgradeBtn.addEventListener("click",()=>{
  if(score>=10){
    score-=10;
-   autoRate+=0.5;
-   collectAmount+=1;
+   autoRate+=0.5; // 自動増加速度アップ
    floatingScores.push({text:'UP!',x:W/2,y:H/2,alpha:1});
  }
 });
+
+// 資源パーティクル生成
+function spawnParticle(){
+ let x=W/2;
+ let y=H/2-40;
+ let dx=(Math.random()-0.5)*2;
+ let dy=-Math.random()*2-1;
+ let size=Math.random()*8+4;
+ particles.push({x,y,dx,dy,size,alpha:1});
+}
 
 // 描画
 function draw(){
@@ -112,15 +115,36 @@ function draw(){
   return f.alpha>0;
  });
 
+ // 資源パーティクル
+ particles = particles.filter(p=>{
+  ctx.fillStyle=`rgba(255,215,0,${p.alpha})`;
+  ctx.beginPath();
+  ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+  ctx.fill();
+  p.x += p.dx;
+  p.y += p.dy;
+  p.dy +=0.05; // 重力
+  p.alpha -=0.01;
+  return p.alpha>0;
+ });
+
  scoreDisplay.innerText='資源: '+Math.floor(score);
 }
 
 // 放置報酬
+let particleTimer=0;
 function update(){
  const now = Date.now();
  const delta = (now - lastTime)/1000;
  lastTime = now;
  score += autoRate*delta;
+
+ // パーティクル生成
+ particleTimer += delta;
+ if(particleTimer>=0.1){ // 0.1秒ごとに資源流出演出
+   spawnParticle();
+   particleTimer=0;
+ }
 }
 
 function loop(){

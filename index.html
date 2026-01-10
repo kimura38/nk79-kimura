@@ -15,90 +15,143 @@ canvas{
  display:block;
  background:#333;
 }
-#upgradeBtn{
+button{
  position:absolute; border:none; border-radius:10px;
- font-size:20px; cursor:pointer;
- z-index:10;
- background:#2196f3; color:white;
+ font-size:18px; cursor:pointer; z-index:10;
 }
-#scoreDisplay{
- position:absolute; top:10px; left:10px; color:white; font-size:24px; z-index:10;
-}
+#upgradeBtn{ background:#2196f3; color:white; }
+#scoreDisplay{ position:absolute; top:10px; left:10px; color:white; font-size:24px; z-index:10; }
+#menu{ position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; color:white; text-align:center; padding-top:100px; font-size:20px; }
+#menu button{ margin:10px; padding:10px 20px; font-size:18px; }
 </style>
 </head>
 <body>
 
-<div id="scoreDisplay">資源: 0</div>
+<div id="scoreDisplay">金: 0</div>
 <button id="upgradeBtn">アップグレード</button>
+
+<div id="menu">
+ <p id="upgradeText">アップグレードしますか？</p>
+ <button id="okBtn">OK</button>
+ <button id="cancelBtn">キャンセル</button>
+</div>
+
 <canvas id="game"></canvas>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const upgradeBtn = document.getElementById("upgradeBtn");
-const scoreDisplay = document.getElementById("scoreDisplay");
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const upgradeBtn=document.getElementById("upgradeBtn");
+const scoreDisplay=document.getElementById("scoreDisplay");
+const menu=document.getElementById("menu");
+const okBtn=document.getElementById("okBtn");
+const cancelBtn=document.getElementById("cancelBtn");
 
 let W,H;
 let score=0;
-let autoRate=1; // 放置報酬: 1/sec
-let floatingScores=[];
-let particles=[]; // 資源流出演出
+let autoRate=1;
 let lastTime=Date.now();
+let particles=[];
+let particleTimer=0;
 
-// デバイス判定
+// === デバイス判定 ===
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
+// === ゲーム状態 ===
+let state="title"; // title,select,game
+let selectedFactory=null;
+
+// === 工場定義 ===
+const factories=[
+ {name:"鉄工場",adv:"初期生産速い",dis:"アップグレード高い"},
+ {name:"木工場",adv:"アップグレード安い",dis:"初期生産遅い"},
+ {name:"化学工場",adv:"バランス型",dis:"初期コスト中"},
+];
+
+// === ウィンドウサイズ調整 ===
 function resize(){
  W=window.innerWidth; H=window.innerHeight;
  canvas.width=W; canvas.height=H;
- if(isMobile){
-   upgradeBtn.style.width='120px';
-   upgradeBtn.style.height='60px';
-   upgradeBtn.style.right='20px';
-   upgradeBtn.style.bottom='20px';
- }else{
-   upgradeBtn.style.width='120px';
-   upgradeBtn.style.height='50px';
-   upgradeBtn.style.right='20px';
-   upgradeBtn.style.bottom='20px';
- }
+ upgradeBtn.style.bottom='20px';
+ upgradeBtn.style.right='20px';
 }
 window.addEventListener("resize",resize);
 resize();
 
-// === localStorageから放置時間計算 ===
+// === localStorage放置報酬 ===
 window.addEventListener("load",()=>{
- let lastVisit = localStorage.getItem("lastVisit");
+ let lastVisit=localStorage.getItem("lastVisit");
  if(lastVisit){
-   let elapsed = (Date.now() - parseInt(lastVisit))/1000;
-   score += autoRate * elapsed;
+   let elapsed=(Date.now()-parseInt(lastVisit))/1000;
+   score+=autoRate*elapsed;
  }
- localStorage.setItem("lastVisit", Date.now());
+ localStorage.setItem("lastVisit",Date.now());
 });
-window.addEventListener("beforeunload",()=>{ localStorage.setItem("lastVisit", Date.now()); });
+window.addEventListener("beforeunload",()=>{ localStorage.setItem("lastVisit",Date.now()); });
 
-// アップグレードボタン
+// === アップグレードボタン ===
 upgradeBtn.addEventListener("click",()=>{
+ if(state!=="game") return;
  if(score>=10){
-   score-=10;
-   autoRate+=0.5; // 自動増加速度アップ
-   floatingScores.push({text:'UP!',x:W/2,y:H/2,alpha:1});
+   menu.style.display="block";
+   document.getElementById("upgradeText").innerText="アップグレードしますか？ (10金)";
  }
 });
+okBtn.addEventListener("click",()=>{
+ score-=10;
+ autoRate+=0.5;
+ floatingScore("+UP!");
+ menu.style.display="none";
+});
+cancelBtn.addEventListener("click",()=>{ menu.style.display="none"; });
 
-// 資源パーティクル生成
+// === 工場選択画面描画 ===
+function drawFactorySelect(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle="white";
+ ctx.font="30px sans-serif";
+ ctx.fillText("工場を選択", W/3, 50);
+ factories.forEach((f,i)=>{
+   ctx.fillStyle=i===selectedFactory?"yellow":"white";
+   ctx.fillText(f.name, W/3, 120+i*60);
+   ctx.font="16px sans-serif";
+   ctx.fillText("利点: "+f.adv, W/3+150, 120+i*60);
+   ctx.fillText("欠点: "+f.dis, W/3+150, 140+i*60);
+   ctx.font="30px sans-serif";
+ });
+ ctx.fillText("クリックで選択", W/3, H-50);
+}
+
+// === タイトル画面描画 ===
+function drawTitle(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle="white";
+ ctx.font="50px sans-serif";
+ ctx.fillText("放置工場ゲーム", W/6, H/3);
+ ctx.font="24px sans-serif";
+ ctx.fillText("タップ/クリックでスタート", W/6, H/2);
+}
+
+// === 金パーティクル ===
 function spawnParticle(){
- let x=W/2;
- let y=H/2-40;
- let dx=(Math.random()-0.5)*2;
- let dy=-Math.random()*2-1;
- let size=Math.random()*8+4;
+ let x=W/2; let y=H/2-40;
+ let dx=(Math.random()-0.5)*1;
+ let dy=-Math.random()*1-1;
+ let size=6;
  particles.push({x,y,dx,dy,size,alpha:1});
 }
 
-// 描画
+// === 浮遊スコア ===
+let floatingScores=[];
+function floatingScore(text){
+ floatingScores.push({text,x:W/2,y:H/2,alpha:1});
+}
+
+// === 描画 ===
 function draw(){
  ctx.clearRect(0,0,W,H);
+ if(state==="title"){ drawTitle(); return; }
+ if(state==="select"){ drawFactorySelect(); return; }
 
  // 工場描画
  ctx.fillStyle='#888';
@@ -107,52 +160,62 @@ function draw(){
  ctx.fillRect(W/2-60,H/2+50,120,20);
 
  // 浮遊スコア
- floatingScores = floatingScores.filter(f=>{
-  ctx.fillStyle=`rgba(255,255,0,${f.alpha})`;
-  ctx.font='20px sans-serif';
-  ctx.fillText(f.text,f.x,f.y);
-  f.y -=1; f.alpha -=0.02;
-  return f.alpha>0;
+ floatingScores=floatingScores.filter(f=>{
+   ctx.fillStyle=`rgba(255,255,0,${f.alpha})`;
+   ctx.font='20px sans-serif';
+   ctx.fillText(f.text,f.x,f.y);
+   f.y-=1; f.alpha-=0.02;
+   return f.alpha>0;
  });
 
- // 資源パーティクル
- particles = particles.filter(p=>{
-  ctx.fillStyle=`rgba(255,215,0,${p.alpha})`;
-  ctx.beginPath();
-  ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-  ctx.fill();
-  p.x += p.dx;
-  p.y += p.dy;
-  p.dy +=0.05; // 重力
-  p.alpha -=0.01;
-  return p.alpha>0;
+ // 金パーティクル
+ particles=particles.filter(p=>{
+   ctx.fillStyle=`rgba(255,215,0,${p.alpha})`;
+   ctx.beginPath();
+   ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+   ctx.fill();
+   p.x+=p.dx; p.y+=p.dy; p.dy+=0.05;
+   p.alpha-=0.01;
+   return p.alpha>0;
  });
 
- scoreDisplay.innerText='資源: '+Math.floor(score);
+ scoreDisplay.innerText="金: "+Math.floor(score);
 }
 
-// 放置報酬
-let particleTimer=0;
+// === 更新 ===
 function update(){
- const now = Date.now();
- const delta = (now - lastTime)/1000;
- lastTime = now;
- score += autoRate*delta;
-
- // パーティクル生成
- particleTimer += delta;
- if(particleTimer>=0.1){ // 0.1秒ごとに資源流出演出
-   spawnParticle();
-   particleTimer=0;
+ const now=Date.now();
+ const delta=(now-lastTime)/1000;
+ lastTime=now;
+ if(state==="game"){
+   let increase=autoRate*delta;
+   for(let i=0;i<Math.floor(increase);i++) spawnParticle();
+   score+=increase;
  }
 }
 
+// === ループ ===
 function loop(){
  update();
  draw();
  requestAnimationFrame(loop);
 }
 loop();
+
+// === タイトルクリックで工場選択へ ===
+canvas.addEventListener("pointerdown",()=>{
+ if(state==="title"){ state="select"; return; }
+ if(state==="select"){
+   let y = event.clientY;
+   factories.forEach((f,i)=>{
+     if(y>120+i*60-20 && y<120+i*60+20){
+       selectedFactory=i;
+       autoRate=(i+1)*1; // 選んだ工場の初期速度
+       state="game";
+     }
+   });
+ }
+});
 </script>
 
 </body>

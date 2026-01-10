@@ -2,171 +2,301 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Chat</title>
+
 <style>
-body { margin:0; font-family:sans-serif; background:#111; color:#fff; }
-header { display:flex; justify-content:space-between; padding:10px; background:#222; }
-button { background:#0a84ff; color:#fff; border:none; padding:6px 10px; border-radius:6px; }
-.hidden { display:none; }
-#chatList div { padding:10px; border-bottom:1px solid #333; cursor:pointer; }
-#messages { height:60vh; overflow:auto; padding:10px; }
-.msg { margin:5px 0; }
-.me { text-align:right; }
-.modal { position:fixed; inset:0; background:rgba(0,0,0,.8); padding:20px; }
+html,body{margin:0;height:100%;font-family:system-ui;background:#f2f2f2;overflow:hidden}
+.screen{position:absolute;inset:0;display:none;flex-direction:column}
+.screen.active{display:flex}
+header{height:50px;background:#06c755;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.list{flex:1;overflow-y:auto}
+.item{background:#fff;padding:14px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}
+.badge{background:red;color:#fff;border-radius:10px;font-size:11px;padding:2px 6px}
+.center{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.chat{flex:1;overflow-y:auto;padding:10px}
+.msg{max-width:70%;padding:8px;border-radius:10px;margin:6px}
+.me{background:#06c755;color:#fff;margin-left:auto}
+.other{background:#ddd}
+.read{font-size:10px;color:#eee;text-align:right}
+.input{display:flex;padding:6px;background:#fff}
+input{flex:1;padding:8px;font-size:16px}
+button{padding:8px 12px;font-size:14px;border:none;border-radius:6px}
+.green{background:#06c755;color:#fff}
+.gray{background:#ccc}
 </style>
 </head>
+
 <body>
 
-<header>
-  <button onclick="openUser()">☰</button>
-  <div id="title">トーク</div>
-  <button onclick="openSelector()">＋</button>
-</header>
-
-<!-- トーク一覧 -->
-<div id="chatList"></div>
-
-<!-- チャット画面 -->
-<div id="chat" class="hidden">
-  <div id="messages"></div>
-  <input id="text" placeholder="メッセージ">
-  <button onclick="send()">送信</button>
+<!-- 初期設定 -->
+<div id="setup" class="screen">
+<header>初期設定</header>
+<div class="center">
+<input id="nameInput" placeholder="名前">
+<button class="green" onclick="saveUser()">開始</button>
+</div>
 </div>
 
-<!-- ユーザー設定 -->
-<div id="user" class="modal hidden">
-  <h3>ユーザー</h3>
-  <div>名前：<input id="myName"></div>
-  <div>コード：<span id="myCode"></span></div>
-  <input id="friendCode" placeholder="フレンドコード">
-  <button onclick="addFriend()">追加</button>
-  <br><br>
-  <button onclick="resetAll()">初期化</button>
-  <button onclick="closeAll()">閉じる</button>
+<!-- トーク一覧 -->
+<div id="home" class="screen">
+<header>
+<span onclick="openUser()">☰</span>
+トーク
+<span onclick="openFriendSelect()">＋</span>
+</header>
+<div id="chatList" class="list"></div>
 </div>
 
 <!-- フレンド選択 -->
-<div id="selector" class="modal hidden">
-  <h3>トーク開始</h3>
-  <div id="friendList"></div>
-  <button onclick="createChat()">追加</button>
-  <button onclick="closeAll()">キャンセル</button>
+<div id="friendSelect" class="screen">
+<header>
+<span onclick="backHome()">←</span>
+トーク開始
+<button class="green" onclick="confirmChat()">追加</button>
+</header>
+<div id="friendList" class="list"></div>
 </div>
 
-<!-- グループ名変更 -->
-<div id="groupEdit" class="modal hidden">
-  <h3>グループ名変更</h3>
-  <input id="groupName">
-  <button onclick="saveGroupName()">保存</button>
-  <button onclick="closeAll()">閉じる</button>
+<!-- チャット -->
+<div id="chatScreen" class="screen">
+<header>
+<span onclick="backHome()">←</span>
+<span id="chatTitle"></span>
+<span onclick="renameGroup()">✎</span>
+</header>
+<div id="messages" class="chat"></div>
+<div class="input">
+<input id="msgInput">
+<button class="green" onclick="sendMsg()">送信</button>
+</div>
+</div>
+
+<!-- ユーザー -->
+<div id="userScreen" class="screen">
+<header>
+<span onclick="backHome()">←</span>ユーザー
+</header>
+<div style="padding:15px">
+<div id="userInfo"></div><br>
+<input id="newName" placeholder="名前変更">
+<button onclick="changeName()">変更</button><br><br>
+
+<b>フレンドコード</b>
+<div id="myCode"></div><br>
+
+<input id="addCode" placeholder="フレンドコード入力">
+<button onclick="addFriend()">フレンド追加</button><br><br>
+
+<button class="gray" onclick="resetAll()">初期化</button>
+</div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
- getDatabase, ref, set, get, push,
- onChildAdded, off, update
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, set, push, onValue, get, update, off } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-const firebaseConfig = {
- apiKey: "AIzaSyCQNNj6Ff39wECAI6i8n1f2NXstF2k7duo",
- authDomain: "chat-99077.firebaseapp.com",
- databaseURL: "https://chat-99077-default-rtdb.firebaseio.com",
- projectId: "chat-99077"
+const firebaseConfig={
+apiKey:"AIzaSyCQNNj6Ff39wECAI6i8n1f2NXstF2k7duo",
+databaseURL:"https://chat-99077-default-rtdb.firebaseio.com",
+projectId:"chat-99077"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
 
-let myUid = localStorage.uid || (localStorage.uid = crypto.randomUUID());
-let currentChat = null;
-let msgListener = null;
-let friends = {};
-let chats = {};
+let userId=localStorage.getItem("uid");
+let currentChat=null;
+let messageRef=null;
+let selectedFriends=[];
 
-document.getElementById("myCode").textContent = myUid;
+const show=id=>{
+document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+};
 
-function openUser(){ user.classList.remove("hidden"); }
-function openSelector(){ loadFriends(); selector.classList.remove("hidden"); }
-function closeAll(){
- document.querySelectorAll(".modal").forEach(m=>m.classList.add("hidden"));
+if(userId) loadHome(); else show("setup");
+
+/* 初期設定 */
+window.saveUser=()=>{
+const name=nameInput.value.trim();
+if(!name)return;
+userId=crypto.randomUUID();
+const code=Math.random().toString(36).slice(2,7).toUpperCase();
+localStorage.setItem("uid",userId);
+localStorage.setItem("name",name);
+localStorage.setItem("code",code);
+set(ref(db,"users/"+userId),{name,code,friends:{},chats:{}});
+loadHome();
+};
+
+/* トーク一覧 */
+function loadHome(){
+show("home");
+onValue(ref(db,"users/"+userId+"/chats"),async snap=>{
+chatList.innerHTML="";
+for(const cid in snap.val()||{}){
+const chatSnap=await get(ref(db,"chats/"+cid));
+const chat=chatSnap.val();
+const members=chat.members;
+let title=chat.name;
+
+if(!title){
+const otherId=Object.keys(members).find(id=>id!==userId);
+const other=await get(ref(db,"users/"+otherId));
+title=other.val().name;
 }
 
-window.addFriend = async ()=>{
- const code = friendCode.value;
- const snap = await get(ref(db,"users/"+code));
- if(!snap.exists()) return alert("存在しません");
- set(ref(db,`friends/${myUid}/${code}`),true);
-};
-
-window.loadFriends = async ()=>{
- friendList.innerHTML="";
- const snap = await get(ref(db,"friends/"+myUid));
- if(!snap.exists()) return;
- friends = snap.val();
- for(const uid in friends){
-   const u = await get(ref(db,"users/"+uid));
-   const name = u.val()?.name || uid;
-   friendList.innerHTML+=`
-    <label><input type="checkbox" value="${uid}">${name}</label><br>`;
- }
-};
-
-window.createChat = ()=>{
- const checked=[...friendList.querySelectorAll("input:checked")].map(i=>i.value);
- if(checked.length===1){
-   const id=[myUid,checked[0]].sort().join("_");
-   set(ref(db,"chats/"+id),{type:"private",members:{[myUid]:1,[checked[0]]:1}});
-   openChat(id);
- }else{
-   const r=push(ref(db,"chats"));
-   const m={}; m[myUid]=1; checked.forEach(u=>m[u]=1);
-   set(r,{type:"group",name:"グループ",members:m});
-   openChat(r.key);
- }
- closeAll();
-};
-
-function openChat(id){
- chat.classList.remove("hidden");
- chatList.classList.add("hidden");
- messages.innerHTML="";
- if(msgListener) off(msgListener);
- currentChat=id;
- const r=ref(db,"messages/"+id);
- msgListener=onChildAdded(r,s=>{
-   const m=s.val();
-   messages.innerHTML+=`<div class="msg ${m.sender===myUid?"me":""}">
-   <b>${m.name}</b>: ${m.text}</div>`;
-   update(ref(db,`messages/${id}/${s.key}/readBy/${myUid}`),true);
- });
+let unread=0;
+for(const mid in chat.messages||{}){
+const m=chat.messages[mid];
+if(m.sender!==userId && (!m.readBy||!m.readBy[userId])) unread++;
 }
 
-window.send=()=>{
- const text=document.getElementById("text").value;
- if(!text) return;
- const id=push(ref(db,"messages/"+currentChat)).key;
- set(ref(db,`messages/${currentChat}/${id}`),{
-   text,
-   sender:myUid,
-   name:myName.value,
-   readBy:{[myUid]:true},
-   time:Date.now()
- });
- document.getElementById("text").value="";
+const div=document.createElement("div");
+div.className="item";
+div.innerHTML=`${title}${unread?`<span class="badge">${unread}</span>`:""}`;
+div.onclick=()=>openChat(cid,title);
+chatList.appendChild(div);
+}
+});
+}
+
+/* フレンド選択 */
+window.openFriendSelect=async()=>{
+show("friendSelect");
+friendList.innerHTML="";
+selectedFriends=[];
+
+const snap=await get(ref(db,"users/"+userId+"/friends"));
+if(!snap.exists()){
+friendList.innerHTML="<div class='item'>フレンドがいません</div>";
+return;
+}
+
+for(const fid in snap.val()){
+const u=await get(ref(db,"users/"+fid));
+const div=document.createElement("div");
+div.className="item";
+div.innerHTML=`<span>${u.val().name}</span><input type="checkbox">`;
+div.querySelector("input").onchange=e=>{
+if(e.target.checked){
+selectedFriends.push({id:fid,name:u.val().name});
+}else{
+selectedFriends=selectedFriends.filter(f=>f.id!==fid);
+}
+};
+friendList.appendChild(div);
+}
 };
 
-window.saveGroupName=()=>{
- update(ref(db,"chats/"+currentChat),{name:groupName.value});
- closeAll();
+/* チャット作成 */
+window.confirmChat=async()=>{
+if(selectedFriends.length===0) return alert("選択してください");
+
+const cid="chat_"+Date.now();
+const isGroup=selectedFriends.length>1;
+const members={[userId]:true};
+selectedFriends.forEach(f=>members[f.id]=true);
+
+set(ref(db,"chats/"+cid),{
+name:isGroup?"新しいグループ":null,
+members
+});
+
+for(const id in members){
+set(ref(db,`users/${id}/chats/${cid}`),true);
+}
+
+openChat(cid,isGroup?"新しいグループ":selectedFriends[0].name);
 };
 
+/* チャット画面 */
+function openChat(cid,title){
+currentChat=cid;
+chatTitle.textContent=title;
+show("chatScreen");
+
+if(messageRef) off(messageRef);
+messageRef=ref(db,"chats/"+cid+"/messages");
+
+onValue(messageRef,snap=>{
+messages.innerHTML="";
+snap?.forEach(m=>{
+const d=m.val();
+if(d.sender!==userId && (!d.readBy||!d.readBy[userId])){
+update(ref(db,`chats/${cid}/messages/${m.key}/readBy`),{[userId]:true});
+}
+const div=document.createElement("div");
+div.className="msg "+(d.sender===userId?"me":"other");
+div.innerHTML=d.sender===userId
+?`${d.text}<div class="read">${d.readBy&&Object.keys(d.readBy).length>1?"既読":"未読"}</div>`
+:d.text;
+messages.appendChild(div);
+messages.scrollTop=messages.scrollHeight;
+});
+});
+}
+
+/* 送信 */
+window.sendMsg=()=>{
+if(!msgInput.value||!currentChat)return;
+push(ref(db,"chats/"+currentChat+"/messages"),{
+sender:userId,
+text:msgInput.value,
+time:Date.now(),
+readBy:{[userId]:true}
+});
+msgInput.value="";
+};
+
+/* グループ名変更 */
+window.renameGroup=async()=>{
+if(!currentChat)return;
+const name=prompt("グループ名");
+if(!name)return;
+update(ref(db,"chats/"+currentChat),{name});
+chatTitle.textContent=name;
+};
+
+/* ユーザー */
+window.openUser=()=>{
+show("userScreen");
+userInfo.textContent="名前: "+localStorage.getItem("name");
+myCode.textContent=localStorage.getItem("code");
+};
+
+/* フレンド追加 */
+window.addFriend=async()=>{
+const input=addCode.value.trim().toUpperCase();
+const snap=await get(ref(db,"users"));
+let target=null;
+snap.forEach(u=>{if(u.val().code===input)target=u.key});
+if(!target||target===userId)return alert("無効");
+set(ref(db,`users/${userId}/friends/${target}`),true);
+set(ref(db,`users/${target}/friends/${userId}`),true);
+alert("追加完了");
+};
+
+/* 名前変更 */
+window.changeName=()=>{
+const n=newName.value.trim();
+if(!n)return;
+set(ref(db,"users/"+userId+"/name"),n);
+localStorage.setItem("name",n);
+alert("変更完了");
+};
+
+/* 初期化 */
 window.resetAll=()=>{
- localStorage.clear();
- location.reload();
+if(confirm("初期化しますか？")){
+localStorage.clear();
+location.reload();
+}
 };
 
-set(ref(db,"users/"+myUid),{name:myName.value||"名無し"});
+window.backHome=()=>loadHome();
 </script>
+
 </body>
 </html>

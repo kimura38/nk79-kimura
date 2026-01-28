@@ -3,47 +3,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Idle Trade</title>
+<title>Idle Trade+</title>
 <style>
-body{
-  margin:0;
-  font-family:system-ui;
-  background:#f2f2f2;
+body{margin:0;font-family:system-ui;background:#f2f2f2}
+#app{max-width:380px;margin:auto;padding:14px}
+.box{background:#fff;padding:12px;border-radius:10px;margin-bottom:12px}
+button{padding:6px 10px;border:none;border-radius:6px;background:#06c755;color:#fff;margin:4px}
+#coin{font-size:22px;font-weight:bold;display:inline-block;transition:.2s}
+.pop{
+  position:absolute;
+  color:#06c755;
+  animation:pop 0.8s forwards;
 }
-#app{
-  max-width:360px;
-  margin:auto;
-  padding:16px;
+@keyframes pop{
+  0%{opacity:1;transform:translateY(0)}
+  100%{opacity:0;transform:translateY(-20px)}
 }
-.box{
-  background:#fff;
-  padding:12px;
-  border-radius:10px;
-  margin-bottom:12px;
-}
-button{
-  padding:6px 12px;
-  border:none;
-  border-radius:6px;
-  background:#06c755;
-  color:#fff;
-  margin-top:6px;
-}
-.small{font-size:13px;color:#555}
+.small{font-size:12px;color:#555}
 </style>
 </head>
 <body>
 
 <div id="app">
-  <h2>🌱 Idle Trade</h2>
+  <h2>🌱 Idle Trade+</h2>
 
   <div class="box">
-    💰 コイン: <b id="coin">0</b>
+    💰 コイン: <span id="coin">0</span><br>
+    <span class="small">放置Lv: <b id="speedLv">1</b></span><br>
+    <button onclick="upgrade()">⚡ スピード強化</button>
   </div>
 
   <div class="box">
-    <b>ショップ</b><br>
-    <button onclick="buy('apple',10)">🍎 りんご (10)</button>
+    <b>ショップ（50種）</b>
+    <div id="shop"></div>
   </div>
 
   <div class="box">
@@ -81,89 +73,112 @@ const userRef=ref(db,"idleUsers/"+uid);
 /* 初期化 */
 const snap=await get(userRef);
 if(!snap.exists()){
-  set(userRef,{coin:0,items:{}});
+  set(userRef,{coin:0,items:{},speed:1,last:Date.now()});
 }
 
-/* 放置収入（5秒ごと +1） */
+/* 放置収入 */
+function earn(amount){
+  coin.textContent=Number(coin.textContent)+amount;
+  coin.style.transform="scale(1.2)";
+  setTimeout(()=>coin.style.transform="scale(1)",150);
+
+  const p=document.createElement("div");
+  p.className="pop";
+  p.textContent="+"+amount;
+  document.body.appendChild(p);
+  p.style.left="50%";
+  p.style.top="60px";
+  setTimeout(()=>p.remove(),800);
+}
+
+/* オフライン分計算 */
+const s0=await get(userRef);
+const u0=s0.val();
+const diff=Math.floor((Date.now()-u0.last)/1000);
+const gain=diff*u0.speed;
+if(gain>0){
+  update(userRef,{coin:u0.coin+gain,last:Date.now()});
+}
+
+/* 定期収入 */
 setInterval(async()=>{
   const s=await get(userRef);
-  update(userRef,{coin:(s.val().coin||0)+1});
-},5000);
+  update(userRef,{
+    coin:s.val().coin+s.val().speed,
+    last:Date.now()
+  });
+},3000);
 
 /* 表示 */
 onValue(userRef,s=>{
   const u=s.val();
-  coin.textContent=u.coin||0;
+  coin.textContent=u.coin;
+  speedLv.textContent=u.speed;
   items.innerHTML="";
   for(const k in u.items||{}){
     items.innerHTML+=`
-      <div>
-        ${k} x${u.items[k]}
+      <div>${k} x${u.items[k]}
         <button onclick="sell('${k}')">売る</button>
       </div>`;
   }
 });
 
+/* ショップ（50種） */
+const shopDiv=document.getElementById("shop");
+for(let i=1;i<=50;i++){
+  const price=i*2;
+  shopDiv.innerHTML+=`
+    <div>
+      item${i} (${price})
+      <button onclick="buy('item${i}',${price})">買う</button>
+    </div>`;
+}
+
 /* 購入 */
 window.buy=async(name,price)=>{
   const s=await get(userRef);
-  if(s.val().coin<price) return alert("コイン不足");
+  if(s.val().coin<price) return;
   update(userRef,{
     coin:s.val().coin-price,
     [`items/${name}`]:(s.val().items?.[name]||0)+1
   });
 };
 
-/* 出品 */
+/* 売る（即金） */
 window.sell=async(name)=>{
-  const price=prompt("価格");
+  const price=Number(prompt("売値"));
   if(!price) return;
 
   const s=await get(userRef);
-  if(!s.val().items?.[name]) return;
-
-  const itemRef=push(ref(db,"market"));
-  set(itemRef,{
-    seller:uid,
-    name,
-    price:Number(price)
-  });
-
   update(userRef,{
+    coin:s.val().coin+price,
     [`items/${name}`]:s.val().items[name]-1
   });
+
+  push(ref(db,"market"),{name,price});
 };
 
-/* マーケット表示 */
+/* マーケット */
 onValue(ref(db,"market"),s=>{
   market.innerHTML="";
   s.forEach(i=>{
     const d=i.val();
     market.innerHTML+=`
-      <div>
-        ${d.name} (${d.price})
-        <button onclick="buyItem('${i.key}','${d.seller}',${d.price},'${d.name}')">
-          購入
-        </button>
+      <div>${d.name} (${d.price})
+      <button onclick="remove(ref(db,'market/${i.key}'))">購入</button>
       </div>`;
   });
 });
 
-/* トレード成立 */
-window.buyItem=async(id,seller,price,name)=>{
+/* スピード強化 */
+window.upgrade=async()=>{
   const s=await get(userRef);
-  if(s.val().coin<price) return alert("コイン不足");
-
+  const cost=s.val().speed*50;
+  if(s.val().coin<cost) return alert("コイン不足");
   update(userRef,{
-    coin:s.val().coin-price,
-    [`items/${name}`]:(s.val().items?.[name]||0)+1
+    coin:s.val().coin-cost,
+    speed:s.val().speed+1
   });
-
-  const sellerRef=ref(db,"idleUsers/"+seller);
-  const ss=await get(sellerRef);
-  update(sellerRef,{coin:(ss.val().coin||0)+price});
-
-  remove(ref(db,"market/"+id));
 };
 </script>
 

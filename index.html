@@ -1,186 +1,725 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Idle Trade+</title>
-<style>
-body{margin:0;font-family:system-ui;background:#f2f2f2}
-#app{max-width:380px;margin:auto;padding:14px}
-.box{background:#fff;padding:12px;border-radius:10px;margin-bottom:12px}
-button{padding:6px 10px;border:none;border-radius:6px;background:#06c755;color:#fff;margin:4px}
-#coin{font-size:22px;font-weight:bold;display:inline-block;transition:.2s}
-.pop{
-  position:absolute;
-  color:#06c755;
-  animation:pop 0.8s forwards;
-}
-@keyframes pop{
-  0%{opacity:1;transform:translateY(0)}
-  100%{opacity:0;transform:translateY(-20px)}
-}
-.small{font-size:12px;color:#555}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>最新記事エディター</title>
+  <!-- Tailwind CSS for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* --- Custom CSS for Rich Text Editor and UI Enhancements --- */
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg-dark: #111827;
+      --bg-panel: #1f2937;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border-color: #374151;
+    }
+   
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-dark); }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+    #editor-content { min-height: 400px; outline: none; }
+    #editor-content:empty:before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; display: block; }
+   
+    #editor-content h1 { font-size: 2em; font-weight: bold; margin-bottom: 0.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
+    #editor-content h2 { font-size: 1.5em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
+    #editor-content h3 { font-size: 1.17em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
+    #editor-content p { margin-bottom: 1em; line-height: 1.6; }
+    #editor-content ul { list-style-type: disc; margin-left: 2em; margin-bottom: 1em; }
+    #editor-content ol { list-style-type: decimal; margin-left: 2em; margin-bottom: 1em; }
+    #editor-content a { color: #60a5fa; text-decoration: underline; }
+    #editor-content a:hover { color: #93c5fd; }
+    #editor-content blockquote { border-left: 4px solid var(--border-color); padding-left: 1em; color: var(--text-muted); font-style: italic; background: rgba(255,255,255,0.05); padding: 10px; margin-bottom: 1em;}
+    #editor-content pre { background: #000; padding: 1em; border-radius: 0.5rem; overflow-x: auto; font-family: monospace; margin-bottom: 1em; border: 1px solid var(--border-color);}
+    #editor-content code { background: rgba(255,255,255,0.1); padding: 0.2em 0.4em; border-radius: 0.25rem; font-family: monospace; }
+   
+    #editor-content img, #editor-content video { max-width: 100%; border-radius: 0.5rem; margin: 1em 0; border: 1px solid var(--border-color); }
+    #editor-content audio { max-width: 100%; margin: 1em 0; }
+    .toolbar-btn { transition: all 0.2s ease; }
+    .toolbar-btn:hover { background-color: var(--border-color); transform: translateY(-1px); }
+    .toolbar-btn:active { transform: translateY(0); }
+    .toolbar-btn.active { background-color: var(--primary); color: white; }
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    .toast { animation: slideInRight 0.3s ease-out forwards; }
+    .toast.hide { animation: fadeOut 0.3s ease-out forwards; }
+    .glass { background: rgba(31, 41, 55, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+  </style>
 </head>
-<body>
-
-<div id="app">
-  <h2>🌱 Idle Trade+</h2>
-
-  <div class="box">
-    💰 コイン: <span id="coin">0</span><br>
-    <span class="small">放置Lv: <b id="speedLv">1</b></span><br>
-    <button onclick="upgrade()">⚡ スピード強化</button>
+<body class="flex h-screen w-full antialiased text-sm md:text-base">
+  <main class="flex-1 flex flex-col h-full bg-gray-900 relative">
+   
+    <!-- Top Navbar -->
+    <header class="h-16 border-b border-gray-800 bg-gray-900 flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
+      <div class="flex items-center gap-4">
+        <div class="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
+          <i class="fa-solid fa-pen-nib"></i>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-sm font-bold text-gray-100" id="current-doc-id">最新記事エディター</span>
+          <div class="flex items-center gap-2">
+            <span id="save-status" class="text-xs text-yellow-500 hidden"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>保存中...</span>
+            <span id="saved-status" class="text-xs text-green-500 hidden"><i class="fa-solid fa-check mr-1"></i>保存完了</span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-xs text-gray-500 flex items-center gap-2 mr-2">
+          <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+          <span>Firebase接続中</span>
+        </div>
+        <button id="btn-preview-toggle" class="px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors text-sm flex items-center gap-2 border border-gray-700">
+          <i class="fa-solid fa-eye"></i> 閲覧ビュー
+        </button>
+        <button id="btn-save-doc" class="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors shadow-lg shadow-indigo-500/30 flex items-center gap-2">
+          <i class="fa-solid fa-cloud-arrow-up"></i> サーバーへ上書き保存
+        </button>
+      </div>
+    </header>
+    <!-- Editor Workspace (Scrollable) -->
+    <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8" id="workspace">
+      <div class="max-w-5xl mx-auto space-y-6">
+       
+        <!-- Document Title -->
+        <div class="bg-gray-800/50 p-1 rounded-xl border border-gray-700/50 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all flex items-center">
+          <input type="text" id="doc-title" placeholder="記事のタイトルを入力..." class="w-full bg-transparent text-2xl sm:text-3xl font-bold px-4 py-3 outline-none placeholder-gray-600 text-left" style="font-size: 30px; color: #ffffff;">
+         
+          <div class="flex items-center gap-3 pr-2 border-l border-gray-700 pl-3 ml-2">
+            <!-- 文字色 -->
+            <div class="flex flex-col items-center justify-center gap-1" title="題名の文字色">
+              <span class="text-[10px] text-gray-400 leading-none">文字色</span>
+              <input type="color" id="title-color" value="#ffffff" class="w-6 h-6 rounded cursor-pointer border-none bg-transparent">
+            </div>
+           
+            <!-- 文字サイズ -->
+            <div class="flex flex-col gap-1 border-l border-gray-700 pl-2">
+              <button id="btn-title-plus" class="w-6 h-6 flex items-center justify-center rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white" title="タイトルを大きく"><i class="fa-solid fa-plus text-xs"></i></button>
+              <button id="btn-title-minus" class="w-6 h-6 flex items-center justify-center rounded bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white" title="タイトルを小さく"><i class="fa-solid fa-minus text-xs"></i></button>
+            </div>
+          </div>
+        </div>
+        <!-- Background Settings (Applied only to editor) -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <i class="fa-solid fa-fill-drip text-gray-400"></i>
+            <span class="text-sm font-bold text-gray-200 whitespace-nowrap">エディターの背景設定:</span>
+          </div>
+          <div class="flex flex-1 flex-wrap items-center gap-4 w-full sm:w-auto">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-400">背景色</label>
+              <input type="color" id="doc-bg-color" value="#1f2937" class="w-8 h-8 rounded cursor-pointer border-none bg-transparent">
+            </div>
+            <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+              <label class="text-xs text-gray-400 whitespace-nowrap">背景画像URL</label>
+              <input type="url" id="doc-bg-image" placeholder="https://..." class="flex-1 w-full bg-gray-900 text-white rounded border border-gray-700 px-3 py-1.5 text-sm outline-none focus:border-indigo-500 placeholder-gray-600">
+            </div>
+          </div>
+        </div>
+        <!-- ========================================== -->
+        <!-- RICH TEXT EDITOR SECTION                   -->
+        <!-- ========================================== -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-2xl overflow-hidden flex flex-col">
+         
+          <!-- Editor Toolbar -->
+          <div class="bg-gray-900 border-b border-gray-700 p-2 flex flex-wrap gap-1 items-center sticky top-0 z-10">
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-2 mr-1">
+              <select id="format-block" class="bg-gray-800 text-gray-200 text-sm rounded border border-gray-700 py-1 px-2 outline-none hover:border-gray-600">
+                <option value="p">段落 (Normal)</option>
+                <option value="h1">見出し 1 (H1)</option>
+                <option value="h2">見出し 2 (H2)</option>
+                <option value="h3">見出し 3 (H3)</option>
+                <option value="blockquote">引用 (Quote)</option>
+                <option value="pre">コード (Code)</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-2 mr-1">
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="bold"><i class="fa-solid fa-bold"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="italic"><i class="fa-solid fa-italic"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="underline"><i class="fa-solid fa-underline"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="strikethrough"><i class="fa-solid fa-strikethrough"></i></button>
+            </div>
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-2 mr-1 relative group">
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400 relative" title="文字色">
+                <i class="fa-solid fa-palette"></i>
+                <div class="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-red-500"></div>
+                <input type="color" id="color-picker" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+              </button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400 relative" title="テキスト背景色">
+                <i class="fa-solid fa-fill-drip"></i>
+                <input type="color" id="bg-color-picker" value="#ffff00" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full">
+              </button>
+            </div>
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-2 mr-1">
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="justifyLeft"><i class="fa-solid fa-align-left"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="justifyCenter"><i class="fa-solid fa-align-center"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="justifyRight"><i class="fa-solid fa-align-right"></i></button>
+            </div>
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-2 mr-1">
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="insertUnorderedList"><i class="fa-solid fa-list-ul"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="insertOrderedList"><i class="fa-solid fa-list-ol"></i></button>
+            </div>
+            <div class="flex items-center gap-1 border-r border-gray-700 pr-2 mr-1">
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" id="btn-insert-link" title="リンク挿入"><i class="fa-solid fa-link"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="unlink" title="リンク解除"><i class="fa-solid fa-unlink"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-blue-400 bg-blue-900/20" id="btn-insert-media" title="本文に画像・動画・音声を挿入">
+                <i class="fa-solid fa-photo-film"></i>
+              </button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="insertHorizontalRule"><i class="fa-solid fa-minus"></i></button>
+            </div>
+            <div class="flex items-center gap-1">
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="undo"><i class="fa-solid fa-rotate-left"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400" data-cmd="redo"><i class="fa-solid fa-rotate-right"></i></button>
+              <button class="toolbar-btn w-8 h-8 rounded flex items-center justify-center text-gray-400 text-red-400 hover:bg-red-900/30" id="btn-clear-format" title="フォーマットクリア"><i class="fa-solid fa-eraser"></i></button>
+            </div>
+          </div>
+          <!-- ContentEditable Wrapper -->
+          <div class="bg-gray-800 p-6 flex-1 overflow-y-auto relative transition-all duration-300" id="editor-wrapper" style="background-color: #1f2937;">
+           
+            <!-- Media Size/Align Toolbar (Floating) -->
+            <div id="media-edit-toolbar" class="hidden absolute z-50 bg-gray-900 border border-indigo-500 rounded-lg shadow-xl p-2 flex flex-wrap gap-2 items-center text-gray-200">
+              <span class="text-xs text-indigo-400 font-bold mr-1"><i class="fa-solid fa-up-down-left-right"></i></span>
+             
+              <div class="flex items-center gap-1 bg-gray-800 p-1 rounded">
+                <span class="text-[10px] text-gray-400 uppercase">幅:</span>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaWidth('25%')">25%</button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaWidth('50%')">50%</button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaWidth('75%')">75%</button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaWidth('100%')">100%</button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaWidth('auto')">自動</button>
+              </div>
+             
+              <div class="flex items-center gap-1 bg-gray-800 p-1 rounded">
+                <span class="text-[10px] text-gray-400 uppercase">配置:</span>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaAlign('left')"><i class="fa-solid fa-align-left"></i></button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaAlign('center')"><i class="fa-solid fa-align-center"></i></button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaAlign('right')"><i class="fa-solid fa-align-right"></i></button>
+                <button class="px-2 py-0.5 bg-gray-700 text-xs text-white rounded hover:bg-indigo-600 transition-colors" onclick="setMediaAlign('none')"><i class="fa-solid fa-ban"></i></button>
+              </div>
+            </div>
+            <!-- Actual Editor -->
+            <div id="editor-content" contenteditable="true" data-placeholder="ここに記事を入力してください... (テキストを選択して上部ツールバーで装飾可能)" class="w-full h-full text-gray-200"></div>
+          </div>
+         
+          <div class="bg-gray-900 border-t border-gray-700 px-4 py-2 flex justify-between items-center text-xs text-gray-500">
+            <div id="word-count">文字数: 0</div>
+            <div>HTMLとして保存されます</div>
+          </div>
+        </div>
+        <!-- Spacer for scrolling -->
+        <div class="h-20"></div>
+      </div>
+    </div>
+  </main>
+  <!-- ========================================== -->
+  <!-- MODALS & OVERLAYS                          -->
+  <!-- ========================================== -->
+ 
+  <!-- Insert Link/Media Modal -->
+  <div id="input-modal" class="fixed inset-0 z-[60] hidden items-center justify-center glass">
+    <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-95 opacity-0" id="input-modal-content">
+      <h3 class="text-lg font-bold text-white mb-4" id="modal-title">URLを入力</h3>
+     
+      <div class="space-y-4">
+        <div id="modal-type-group" class="hidden">
+          <label class="block text-xs text-gray-400 mb-1">メディアの種類</label>
+          <select id="modal-media-type" class="w-full bg-gray-800 text-white rounded border border-gray-700 px-3 py-2 outline-none focus:border-indigo-500">
+            <option value="image">画像</option>
+            <option value="video">動画</option>
+            <option value="audio">音声</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">URL</label>
+          <input type="text" id="modal-url-input" class="w-full bg-gray-800 text-white rounded border border-gray-700 px-3 py-2 outline-none focus:border-indigo-500" placeholder="https://...">
+        </div>
+       
+        <div id="modal-text-group" class="hidden">
+          <label class="block text-xs text-gray-400 mb-1">表示テキスト</label>
+          <input type="text" id="modal-text-input" class="w-full bg-gray-800 text-white rounded border border-gray-700 px-3 py-2 outline-none focus:border-indigo-500" placeholder="リンクのテキスト">
+        </div>
+        <!-- ダウンロードボタン追加オプション -->
+        <div id="modal-download-group" class="hidden mt-2 p-3 bg-gray-800 rounded border border-gray-700">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="modal-download-check" class="w-4 h-4 rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500 outline-none">
+            <span class="text-sm text-gray-300">挿入したメディアの端にダウンロードボタンを付ける</span>
+          </label>
+        </div>
+      </div>
+     
+      <div class="flex justify-end gap-3 mt-6">
+        <button id="btn-modal-cancel" class="px-4 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">キャンセル</button>
+        <button id="btn-modal-confirm" class="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white transition-colors">挿入</button>
+      </div>
+    </div>
   </div>
-
-  <div class="box">
-    <b>ショップ（50種）</b>
-    <div id="shop"></div>
+  <!-- Fullscreen Preview Modal (Clean White Interface) -->
+  <div id="preview-modal" class="fixed inset-0 z-[70] hidden bg-white flex flex-col">
+    <!-- プレビュー用のシンプルなヘッダー -->
+    <div class="bg-gray-100 border-b border-gray-200 p-3 flex justify-between items-center flex-shrink-0 shadow-sm z-20">
+      <span class="text-sm font-bold text-gray-500 ml-2">プレビュー (実際の表示画面)</span>
+      <button id="btn-close-preview" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-1.5 rounded text-sm flex items-center gap-2 transition-colors">
+        <i class="fa-solid fa-xmark"></i> 編集に戻る
+      </button>
+    </div>
+   
+    <!-- 真っ白なプレビューコンテナ -->
+    <div class="flex-1 overflow-y-auto p-6 sm:p-12 relative transition-all duration-300" id="preview-container">
+      <div class="max-w-4xl mx-auto relative min-h-full flex flex-col">
+       
+        <!-- 題名：左寄せ書き固定 -->
+        <div class="w-full text-left mb-6 z-10">
+          <h1 id="preview-title" class="font-bold text-gray-900 m-0 p-0" style="font-size: 30px; word-break: break-word;"></h1>
+        </div>
+       
+        <!-- 本文表示エリア -->
+        <div class="text-gray-900 prose prose-lg max-w-none break-words" id="preview-content-area" style="font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.8;">
+          <!-- HTML Content injected here -->
+        </div>
+      </div>
+    </div>
   </div>
-
-  <div class="box">
-    <b>持ち物</b>
-    <div id="items"></div>
-  </div>
-
-  <div class="box">
-    <b>マーケット</b>
-    <div id="market"></div>
-  </div>
-</div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, update, onValue, push, remove, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-/* Firebase */
-const firebaseConfig={
-  apiKey:"AIzaSyCQNNj6Ff39wECAI6i8n1f2NXstF2k7duo",
-  databaseURL:"https://chat-99077-default-rtdb.firebaseio.com",
-  projectId:"chat-99077"
-};
-const app=initializeApp(firebaseConfig);
-const db=getDatabase(app);
-
-/* ユーザー */
-let uid=localStorage.getItem("idle_uid");
-if(!uid){
-  uid=crypto.randomUUID();
-  localStorage.setItem("idle_uid",uid);
-}
-const userRef=ref(db,"idleUsers/"+uid);
-
-/* 初期化 */
-const snap=await get(userRef);
-if(!snap.exists()){
-  set(userRef,{coin:0,items:{},speed:1,last:Date.now()});
-}
-
-/* 放置収入 */
-function earn(amount){
-  coin.textContent=Number(coin.textContent)+amount;
-  coin.style.transform="scale(1.2)";
-  setTimeout(()=>coin.style.transform="scale(1)",150);
-
-  const p=document.createElement("div");
-  p.className="pop";
-  p.textContent="+"+amount;
-  document.body.appendChild(p);
-  p.style.left="50%";
-  p.style.top="60px";
-  setTimeout(()=>p.remove(),800);
-}
-
-/* オフライン分計算 */
-const s0=await get(userRef);
-const u0=s0.val();
-const diff=Math.floor((Date.now()-u0.last)/1000);
-const gain=diff*u0.speed;
-if(gain>0){
-  update(userRef,{coin:u0.coin+gain,last:Date.now()});
-}
-
-/* 定期収入 */
-setInterval(async()=>{
-  const s=await get(userRef);
-  update(userRef,{
-    coin:s.val().coin+s.val().speed,
-    last:Date.now()
-  });
-},3000);
-
-/* 表示 */
-onValue(userRef,s=>{
-  const u=s.val();
-  coin.textContent=u.coin;
-  speedLv.textContent=u.speed;
-  items.innerHTML="";
-  for(const k in u.items||{}){
-    items.innerHTML+=`
-      <div>${k} x${u.items[k]}
-        <button onclick="sell('${k}')">売る</button>
-      </div>`;
-  }
-});
-
-/* ショップ（50種） */
-const shopDiv=document.getElementById("shop");
-for(let i=1;i<=50;i++){
-  const price=i*2;
-  shopDiv.innerHTML+=`
-    <div>
-      item${i} (${price})
-      <button onclick="buy('item${i}',${price})">買う</button>
-    </div>`;
-}
-
-/* 購入 */
-window.buy=async(name,price)=>{
-  const s=await get(userRef);
-  if(s.val().coin<price) return;
-  update(userRef,{
-    coin:s.val().coin-price,
-    [`items/${name}`]:(s.val().items?.[name]||0)+1
-  });
-};
-
-/* 売る（即金） */
-window.sell=async(name)=>{
-  const price=Number(prompt("売値"));
-  if(!price) return;
-
-  const s=await get(userRef);
-  update(userRef,{
-    coin:s.val().coin+price,
-    [`items/${name}`]:s.val().items[name]-1
-  });
-
-  push(ref(db,"market"),{name,price});
-};
-
-/* マーケット */
-onValue(ref(db,"market"),s=>{
-  market.innerHTML="";
-  s.forEach(i=>{
-    const d=i.val();
-    market.innerHTML+=`
-      <div>${d.name} (${d.price})
-      <button onclick="remove(ref(db,'market/${i.key}'))">購入</button>
-      </div>`;
-  });
-});
-
-/* スピード強化 */
-window.upgrade=async()=>{
-  const s=await get(userRef);
-  const cost=s.val().speed*50;
-  if(s.val().coin<cost) return alert("コイン不足");
-  update(userRef,{
-    coin:s.val().coin-cost,
-    speed:s.val().speed+1
-  });
-};
-</script>
-
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-[80] flex flex-col gap-3 pointer-events-none"></div>
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT LOGIC                           -->
+  <!-- ========================================== -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+    import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyCKRiEvXdGe4DA4y1RcJRIwUHo2NaHCJac",
+      authDomain: "shotgame26-fps.firebaseapp.com",
+      projectId: "shotgame26-fps",
+      storageBucket: "shotgame26-fps.firebasestorage.app",
+      messagingSenderId: "920640762478",
+      appId: "1:920640762478:web:b9832aa894e0c050a36c7f",
+      measurementId: "G-2Q6S1XM48H"
+    };
+    let app, analytics, db;
+    try {
+      app = initializeApp(firebaseConfig);
+      analytics = getAnalytics(app);
+      db = getFirestore(app);
+      showToast('Firebaseに接続しました', 'success');
+    } catch (e) {
+      console.error("Firebase init error:", e);
+      showToast('Firebaseの初期化に失敗しました。', 'error');
+    }
+    const COLLECTION_NAME = "articles";
+    const SINGLE_DOC_ID = "main_article_document";
+    const editorEl = document.getElementById('editor-content');
+    const editorWrapper = document.getElementById('editor-wrapper');
+    const titleInput = document.getElementById('doc-title');
+    const wordCountEl = document.getElementById('word-count');
+   
+    let currentTitleSize = 30; // タイトルの初期フォントサイズ
+    let currentTitleColor = "#ffffff"; // タイトルの初期文字色
+    const titleColorInput = document.getElementById('title-color');
+    titleColorInput.addEventListener('input', (e) => {
+      currentTitleColor = e.target.value;
+      titleInput.style.color = currentTitleColor;
+    });
+    document.getElementById('btn-title-plus').addEventListener('click', () => {
+      currentTitleSize += 2;
+      titleInput.style.fontSize = `${currentTitleSize}px`;
+    });
+    document.getElementById('btn-title-minus').addEventListener('click', () => {
+      if(currentTitleSize > 12) {
+        currentTitleSize -= 2;
+        titleInput.style.fontSize = `${currentTitleSize}px`;
+      }
+    });
+   
+    const bgColorInput = document.getElementById('doc-bg-color');
+    const bgImageInput = document.getElementById('doc-bg-image');
+    const btnSave = document.getElementById('btn-save-doc');
+    const btnPreview = document.getElementById('btn-preview-toggle');
+    const statusSave = document.getElementById('save-status');
+    const statusSaved = document.getElementById('saved-status');
+   
+    const mediaToolbar = document.getElementById('media-edit-toolbar');
+    let selectedMediaNode = null;
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      let icon = '<i class="fa-solid fa-circle-info text-blue-400"></i>';
+      let border = 'border-blue-500/50';
+      if(type === 'success') { icon = '<i class="fa-solid fa-circle-check text-green-400"></i>'; border = 'border-green-500/50'; }
+      else if (type === 'error') { icon = '<i class="fa-solid fa-circle-exclamation text-red-400"></i>'; border = 'border-red-500/50'; }
+      toast.className = `toast glass border-l-4 ${border} text-white px-4 py-3 rounded shadow-lg flex items-center gap-3 w-72 pointer-events-auto`;
+      toast.innerHTML = `${icon} <span class="text-sm font-medium flex-1">${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+    function updateEditorBackground() {
+      const color = bgColorInput.value || '#1f2937';
+      const imageUrl = bgImageInput.value.trim();
+      editorWrapper.style.backgroundColor = color;
+      if (imageUrl) {
+        editorWrapper.style.backgroundImage = `url('${imageUrl}')`;
+        editorWrapper.style.backgroundSize = 'cover';
+        editorWrapper.style.backgroundPosition = 'center';
+        editorWrapper.style.backgroundAttachment = 'fixed';
+      } else {
+        editorWrapper.style.backgroundImage = 'none';
+      }
+    }
+    bgColorInput.addEventListener('input', updateEditorBackground);
+    bgImageInput.addEventListener('change', updateEditorBackground);
+    function initEditor() {
+      document.querySelectorAll('.toolbar-btn[data-cmd]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.execCommand(btn.getAttribute('data-cmd'), false, null);
+          editorEl.focus();
+          updateToolbarState();
+        });
+      });
+      document.getElementById('format-block').addEventListener('change', (e) => {
+        document.execCommand('formatBlock', false, e.target.value);
+        editorEl.focus();
+        e.target.value = 'p';
+      });
+      document.getElementById('color-picker').addEventListener('input', (e) => {
+        document.execCommand('foreColor', false, e.target.value);
+        e.target.previousElementSibling.style.backgroundColor = e.target.value;
+      });
+      document.getElementById('bg-color-picker').addEventListener('input', (e) => {
+        document.execCommand('backColor', false, e.target.value);
+      });
+      document.getElementById('btn-clear-format').addEventListener('click', () => {
+        document.execCommand('removeFormat', false, null);
+        editorEl.focus();
+      });
+      editorEl.addEventListener('input', () => {
+        wordCountEl.textContent = `文字数: ${editorEl.innerText.trim().length}`;
+      });
+      document.addEventListener('selectionchange', updateToolbarState);
+      editorEl.addEventListener('click', (e) => {
+        const wrapper = e.target.closest('.media-wrapper');
+        const isMedia = e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO';
+       
+        // ハイライトをリセット
+        editorEl.querySelectorAll('.media-wrapper, img, video, audio').forEach(el => el.style.outline = 'none');
+       
+        if (wrapper) {
+          selectedMediaNode = wrapper;
+        } else if (isMedia) {
+          selectedMediaNode = e.target;
+        } else if (!mediaToolbar.contains(e.target)) {
+          selectedMediaNode = null;
+          mediaToolbar.classList.add('hidden');
+          return;
+        }
+        if (selectedMediaNode && !mediaToolbar.contains(e.target)) {
+          selectedMediaNode.style.outline = '3px solid #4f46e5';
+          selectedMediaNode.style.outlineOffset = '2px';
+         
+          mediaToolbar.classList.remove('hidden');
+          let topPos = selectedMediaNode.offsetTop - 50;
+          if (topPos < 0) topPos = 0;
+          mediaToolbar.style.top = `${topPos}px`;
+          mediaToolbar.style.left = `${selectedMediaNode.offsetLeft}px`;
+        }
+      });
+    }
+    window.setMediaWidth = (width) => {
+      if (selectedMediaNode) { selectedMediaNode.style.width = width; selectedMediaNode.style.height = 'auto'; }
+    };
+    window.setMediaAlign = (align) => {
+      if (selectedMediaNode) {
+        selectedMediaNode.style.margin = '1em 0';
+        selectedMediaNode.style.display = 'inline-block';
+        selectedMediaNode.style.float = 'none';
+        selectedMediaNode.style.verticalAlign = 'middle';
+       
+        if (align === 'left') {
+          selectedMediaNode.style.float = 'left';
+          selectedMediaNode.style.margin = '0 1em 1em 0';
+        } else if (align === 'right') {
+          selectedMediaNode.style.float = 'right';
+          selectedMediaNode.style.margin = '0 0 1em 1em';
+        } else if (align === 'center') {
+          selectedMediaNode.style.display = 'block';
+          selectedMediaNode.style.margin = '1em auto';
+        }
+      }
+    };
+    function updateToolbarState() {
+      ['bold', 'italic', 'underline', 'strikethrough', 'justifyLeft', 'justifyCenter', 'justifyRight', 'insertUnorderedList', 'insertOrderedList'].forEach(cmd => {
+        const btn = document.querySelector(`.toolbar-btn[data-cmd="${cmd}"]`);
+        if(btn) {
+          if(document.queryCommandState(cmd)) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+      });
+    }
+    const modal = document.getElementById('input-modal');
+    const modalContent = document.getElementById('input-modal-content');
+    const modalUrl = document.getElementById('modal-url-input');
+    const modalText = document.getElementById('modal-text-input');
+    const modalTextGroup = document.getElementById('modal-text-group');
+    const modalTitle = document.getElementById('modal-title');
+    const modalTypeGroup = document.getElementById('modal-type-group');
+    const modalMediaType = document.getElementById('modal-media-type');
+    const modalDownloadGroup = document.getElementById('modal-download-group');
+    const modalDownloadCheck = document.getElementById('modal-download-check');
+   
+    let currentModalAction = null;
+    let savedSelection = null;
+    function saveSelection() {
+      if (window.getSelection) {
+        const sel = window.getSelection();
+        if (sel.getRangeAt && sel.rangeCount) return sel.getRangeAt(0);
+      }
+      return null;
+    }
+    function restoreSelection(range) {
+      if (range && window.getSelection) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+    function openModal(action) {
+      savedSelection = saveSelection();
+      currentModalAction = action;
+      modalUrl.value = '';
+      modalText.value = '';
+      modalDownloadCheck.checked = false;
+     
+      if(action === 'link') {
+        modalTitle.textContent = 'リンクを挿入';
+        modalTextGroup.classList.remove('hidden');
+        modalTypeGroup.classList.add('hidden');
+        modalDownloadGroup.classList.add('hidden');
+        const sel = window.getSelection();
+        if(sel && !sel.isCollapsed) modalText.value = sel.toString();
+      } else if (action === 'media') {
+        modalTitle.textContent = '本文にメディアを挿入';
+        modalTextGroup.classList.add('hidden');
+        modalTypeGroup.classList.remove('hidden');
+        modalDownloadGroup.classList.remove('hidden'); // Show download option for media
+        modalMediaType.value = 'image';
+      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      setTimeout(() => {
+        modalContent.classList.remove('scale-95', 'opacity-0');
+        modalContent.classList.add('scale-100', 'opacity-100');
+        modalUrl.focus();
+      }, 10);
+    }
+    function closeModal() {
+      modalContent.classList.remove('scale-100', 'opacity-100');
+      modalContent.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        editorEl.focus();
+      }, 200);
+    }
+    document.getElementById('btn-insert-link').addEventListener('click', (e) => { e.preventDefault(); openModal('link'); });
+    document.getElementById('btn-insert-media').addEventListener('click', (e) => { e.preventDefault(); openModal('media'); });
+    document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
+    document.getElementById('btn-modal-confirm').addEventListener('click', () => {
+      const url = modalUrl.value.trim();
+      restoreSelection(savedSelection);
+     
+      if(url) {
+        if(currentModalAction === 'link') {
+          const text = modalText.value.trim();
+          if(text) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.textContent = text;
+            a.target = '_blank';
+            document.execCommand('insertHTML', false, a.outerHTML);
+          } else {
+            document.execCommand('createLink', false, url);
+          }
+          editorEl.querySelectorAll('a').forEach(l => { if(!l.getAttribute('target')) l.setAttribute('target', '_blank'); });
+         
+        } else if (currentModalAction === 'media') {
+          const type = modalMediaType.value;
+          const withDownload = modalDownloadCheck.checked;
+         
+          let html = '';
+         
+          if (type === 'image' || type === 'video') {
+            // 専用の黒背景ラップ要素
+            const wrapperStyle = "position: relative; display: inline-block; width: 60%; min-width: 150px; min-height: 100px; margin: 1em 0; resize: both; overflow: hidden; vertical-align: middle; border: 1px solid #4b5563; border-radius: 0.5rem; background-color: #000;";
+            const mediaStyle = "width: 100%; height: 100%; object-fit: contain; display: block;";
+           
+            html += `<div class="media-wrapper" style="${wrapperStyle}" contenteditable="false">`;
+           
+            if (type === 'image') {
+              html += `<img src="${url}" alt="Image" style="${mediaStyle}" onerror="this.onerror=null; this.src='https://via.placeholder.com/400x200?text=Image+Not+Found';">`;
+            } else {
+              html += `<video src="${url}" controls style="${mediaStyle}"></video>`;
+            }
+            // ダウンロードボタン（画像/動画用：右下・半透明）
+            if (withDownload) {
+              // 動画の場合はシークバー等のコントロールと被らないように少し上に配置する
+              const bottomPos = type === 'video' ? '60px' : '15px';
+              const btnStyle = `position: absolute; bottom: ${bottomPos}; right: 15px; background: rgba(0,0,0,0.5); color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; text-decoration: none; transition: all 0.3s; z-index: 20; font-size: 1.2rem; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.2);`;
+              html += `<a href="${url}" download target="_blank" style="${btnStyle}" onmouseover="this.style.background='rgba(79,70,229,0.9)'; this.style.transform='scale(1.05)';" onmouseout="this.style.background='rgba(0,0,0,0.5)'; this.style.transform='scale(1)';" title="ダウンロード"><i class="fa-solid fa-download"></i></a>`;
+            }
+            html += `</div>`;
+          } else if (type === 'audio') {
+            const wrapperStyle = "position: relative; display: inline-flex; align-items: center; max-width: 100%; margin: 1em 0; vertical-align: middle;";
+            html += `<div class="media-wrapper audio-wrapper" style="${wrapperStyle}" contenteditable="false">`;
+            html += `<audio src="${url}" controls style="width: 300px; max-width: 100%;"></audio>`;
+            if (withDownload) {
+              const btnStyle = "margin-left: 10px; color: #9ca3af; opacity: 0.6; text-decoration: none; font-size: 1.5rem; transition: all 0.2s;";
+              html += `<a href="${url}" download target="_blank" style="${btnStyle}" onmouseover="this.style.opacity='1'; this.style.color='#4f46e5'" onmouseout="this.style.opacity='0.6'; this.style.color='#9ca3af'" title="ダウンロード"><i class="fa-solid fa-circle-down"></i></a>`;
+            }
+            html += `</div>`;
+          }
+          // 前後にスペースを入れてレイアウトを調整しやすくする
+          document.execCommand('insertHTML', false, html + '&nbsp;');
+        }
+      }
+      closeModal();
+    });
+    async function loadMainArticle() {
+      if(!db) return;
+      try {
+        const docRef = doc(db, COLLECTION_NAME, SINGLE_DOC_ID);
+        const docSnap = await getDoc(docRef);
+       
+        if(docSnap.exists()) {
+          const data = docSnap.data();
+          titleInput.value = data.title || '';
+          editorEl.innerHTML = data.content || '';
+         
+          if(data.settings) {
+            bgColorInput.value = data.settings.bgColor || '#1f2937';
+            bgImageInput.value = data.settings.bgImage || '';
+            if (data.settings.titleSize) {
+              currentTitleSize = data.settings.titleSize;
+              titleInput.style.fontSize = `${currentTitleSize}px`;
+            }
+            if (data.settings.titleColor) {
+              currentTitleColor = data.settings.titleColor;
+              titleInput.style.color = currentTitleColor;
+              titleColorInput.value = currentTitleColor;
+            } else {
+              currentTitleColor = "#ffffff";
+              titleInput.style.color = currentTitleColor;
+              titleColorInput.value = currentTitleColor;
+            }
+            updateEditorBackground();
+          }
+          editorEl.dispatchEvent(new Event('input'));
+          showToast('最新記事を読み込みました', 'success');
+        } else {
+          showToast('新規記事として開始します', 'info');
+          updateEditorBackground();
+        }
+      } catch (error) {
+        console.error("Load error:", error);
+        showToast('データの取得に失敗しました', 'error');
+      }
+    }
+    async function saveMainArticle() {
+      if(!db) { showToast('DB未接続です', 'error'); return; }
+      if(selectedMediaNode) selectedMediaNode.style.outline = 'none';
+      mediaToolbar.classList.add('hidden');
+      const title = titleInput.value.trim();
+      const content = editorEl.innerHTML;
+      if(!title && !content.trim()) {
+        showToast('タイトルまたは内容を入力してください', 'error');
+        return;
+      }
+      btnSave.disabled = true;
+      statusSave.classList.remove('hidden');
+      statusSaved.classList.add('hidden');
+      const data = {
+        title: title,
+        content: content,
+        settings: {
+          bgColor: bgColorInput.value,
+          bgImage: bgImageInput.value.trim(),
+          titleSize: currentTitleSize,
+          titleColor: currentTitleColor
+        },
+        updatedAt: serverTimestamp()
+      };
+      try {
+        await setDoc(doc(db, COLLECTION_NAME, SINGLE_DOC_ID), data, { merge: true });
+        showToast('上書き保存しました', 'success');
+      } catch (error) {
+        showToast(`保存エラー`, 'error');
+      } finally {
+        btnSave.disabled = false;
+        statusSave.classList.add('hidden');
+        statusSaved.classList.remove('hidden');
+        setTimeout(() => statusSaved.classList.add('hidden'), 3000);
+      }
+    }
+    btnSave.addEventListener('click', saveMainArticle);
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveMainArticle(); }
+    });
+    // --- PREVIEW LOGIC ---
+    const previewModal = document.getElementById('preview-modal');
+    const btnClosePreview = document.getElementById('btn-close-preview');
+    const previewTitle = document.getElementById('preview-title');
+    const previewContainer = document.getElementById('preview-container');
+    const previewContent = document.getElementById('preview-content-area');
+    btnPreview.addEventListener('click', () => {
+      if(selectedMediaNode) selectedMediaNode.style.outline = 'none';
+      mediaToolbar.classList.add('hidden');
+      previewTitle.textContent = titleInput.value.trim() || '無題のドキュメント';
+      previewTitle.style.fontSize = `${currentTitleSize}px`;
+      previewTitle.style.color = currentTitleColor;
+     
+      // 背景設定の反映
+      const bgColor = bgColorInput.value || '#ffffff';
+      const bgImg = bgImageInput.value.trim();
+     
+      if (bgImg) {
+        previewContainer.style.backgroundImage = `url('${bgImg}')`;
+        previewContainer.style.backgroundColor = 'transparent';
+        previewContainer.style.backgroundSize = 'cover';
+        previewContainer.style.backgroundPosition = 'center';
+        previewContainer.style.backgroundAttachment = 'fixed';
+      } else {
+        previewContainer.style.backgroundImage = 'none';
+        previewContainer.style.backgroundColor = bgColor;
+      }
+     
+      // HTMLを流し込む。
+      previewContent.innerHTML = editorEl.innerHTML;
+     
+      previewModal.classList.remove('hidden');
+    });
+    btnClosePreview.addEventListener('click', () => {
+      previewModal.classList.add('hidden');
+      previewModal.querySelectorAll('video, audio').forEach(el => { el.pause(); el.currentTime = 0; });
+    });
+    window.addEventListener('DOMContentLoaded', () => {
+      initEditor();
+      loadMainArticle();
+      setTimeout(() => titleInput.focus(), 500);
+    });
+  </script>
 </body>
 </html>
